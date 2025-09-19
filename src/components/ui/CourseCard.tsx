@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { colors, typography, spacing, borderRadius, shadows } from '@/src/config/theme';
 import { ProgressBar } from './ProgressBar';
 
@@ -24,6 +24,26 @@ export const CourseCard: React.FC<CourseCardProps> = ({
   onPress,
   accessibilityLabel,
 }) => {
+  const scaleAnim = React.useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.98,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
   const getLevelColor = () => {
     const levelColors = [
       colors.info,      // Level 1
@@ -35,12 +55,22 @@ export const CourseCard: React.FC<CourseCardProps> = ({
   };
 
   return (
-    <TouchableOpacity
-      style={styles.container}
-      onPress={onPress}
-      accessibilityLabel={accessibilityLabel || `${title} course, ${progress}% complete`}
-      accessibilityRole="button"
+    <Animated.View
+      style={[
+        {
+          transform: [{ scale: scaleAnim }]
+        }
+      ]}
     >
+      <TouchableOpacity
+        style={styles.container}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        accessibilityLabel={accessibilityLabel || `${title} course, ${progress}% complete`}
+        accessibilityRole="button"
+        activeOpacity={1}
+      >
       <View style={styles.header}>
         <View style={[styles.levelBadge, { backgroundColor: getLevelColor() }]}>
           <Text style={styles.levelText}>Level {level}</Text>
@@ -61,19 +91,18 @@ export const CourseCard: React.FC<CourseCardProps> = ({
         </Text>
       </View>
     </TouchableOpacity>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface, // White background
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginVertical: spacing.sm,
     marginHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.medium,
+    ...shadows.card, // Updated card shadow
   },
   header: {
     flexDirection: 'row',
@@ -88,7 +117,7 @@ const styles = StyleSheet.create({
   },
   levelText: {
     ...typography.caption,
-    color: colors.background,
+    color: colors.surface, // White text on colored badge
     fontWeight: '600',
     fontSize: 12,
   },

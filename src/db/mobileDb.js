@@ -1,5 +1,5 @@
 // Mobile-specific database implementation using expo-sqlite
-const SQLite = require('expo-sqlite');
+import * as SQLite from 'expo-sqlite';
 
 let db = null;
 
@@ -44,14 +44,17 @@ export const initDB = async () => {
       
       CREATE TABLE IF NOT EXISTS user_progress (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
         lesson_id INTEGER,
         quiz_id INTEGER,
         is_completed BOOLEAN DEFAULT 0,
         score INTEGER,
         completed_at DATETIME,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id),
         FOREIGN KEY (lesson_id) REFERENCES lessons (id),
-        FOREIGN KEY (quiz_id) REFERENCES quizzes (id)
+        FOREIGN KEY (quiz_id) REFERENCES quizzes (id),
+        UNIQUE(user_id, lesson_id, quiz_id)
       );
       
       CREATE TABLE IF NOT EXISTS jobs (
@@ -67,6 +70,31 @@ export const initDB = async () => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (required_level) REFERENCES levels (id)
       );
+
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        first_name TEXT NOT NULL,
+        last_name TEXT NOT NULL,
+        is_active BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS user_downloads (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        lesson_id INTEGER NOT NULL,
+        local_file_path TEXT,
+        is_downloaded BOOLEAN DEFAULT 0,
+        downloaded_at DATETIME,
+        file_size INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id),
+        FOREIGN KEY (lesson_id) REFERENCES lessons (id),
+        UNIQUE(user_id, lesson_id)
+      );
     `);
     
     await seedData();
@@ -79,8 +107,24 @@ export const initDB = async () => {
 const seedData = async () => {
   try {
     const levelCount = await db.getFirstAsync('SELECT COUNT(*) as count FROM levels');
-    
+
     if (levelCount.count === 0) {
+      // Try to load from Bubble first, fallback to static data
+      console.log('No local data found, attempting to load from Bubble...');
+
+      try {
+        const { syncService } = await import('../services/syncService');
+        const success = await syncService.initialContentLoad();
+
+        if (success) {
+          console.log('Content loaded successfully from Bubble');
+          return;
+        } else {
+          console.log('Failed to load from Bubble, using static fallback data');
+        }
+      } catch (error) {
+        console.log('Error loading from Bubble, using static fallback data:', error.message);
+      }
       await db.execAsync(`
         INSERT INTO levels (title, description, order_index) VALUES
         ('AI Fundamentals', 'Learn the basics of Artificial Intelligence and its applications', 1),
@@ -173,21 +217,21 @@ export const getAllLevels = async () => {
   }
 };
 
-export const getProgress = async (lessonId = null, quizId = null) => {
+export const getProgress = async (userId, lessonId = null, quizId = null) => {
   try {
-    let query = 'SELECT * FROM user_progress WHERE 1=1';
-    const params = [];
-    
+    let query = 'SELECT * FROM user_progress WHERE user_id = ?';
+    const params = [userId];
+
     if (lessonId) {
       query += ' AND lesson_id = ?';
       params.push(lessonId);
     }
-    
+
     if (quizId) {
       query += ' AND quiz_id = ?';
       params.push(quizId);
     }
-    
+
     return await db.getAllAsync(query, params);
   } catch (error) {
     console.error('Error getting progress:', error);
@@ -195,13 +239,13 @@ export const getProgress = async (lessonId = null, quizId = null) => {
   }
 };
 
-export const saveProgress = async (lessonId, quizId = null, score = null, isCompleted = true) => {
+export const saveProgress = async (userId, lessonId, quizId = null, score = null, isCompleted = true) => {
   try {
     await db.runAsync(
-      `INSERT OR REPLACE INTO user_progress 
-       (lesson_id, quiz_id, is_completed, score, completed_at) 
-       VALUES (?, ?, ?, ?, datetime('now'))`,
-      [lessonId, quizId, isCompleted ? 1 : 0, score]
+      `INSERT OR REPLACE INTO user_progress
+       (user_id, lesson_id, quiz_id, is_completed, score, completed_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+      [userId, lessonId, quizId, isCompleted ? 1 : 0, score]
     );
     console.log('Progress saved successfully');
   } catch (error) {
@@ -233,10 +277,11 @@ export const getJobsByLevel = async (minLevel = 1) => {
   }
 };
 
-export const getCompletedLessonsCount = async () => {
+export const getCompletedLessonsCount = async (userId) => {
   try {
     const result = await db.getFirstAsync(
-      'SELECT COUNT(DISTINCT lesson_id) as count FROM user_progress WHERE is_completed = 1'
+      'SELECT COUNT(DISTINCT lesson_id) as count FROM user_progress WHERE user_id = ? AND is_completed = 1',
+      [userId]
     );
     return result?.count || 0;
   } catch (error) {
@@ -245,21 +290,21 @@ export const getCompletedLessonsCount = async () => {
   }
 };
 
-export const getLevelProgress = async (levelId) => {
+export const getLevelProgress = async (userId, levelId) => {
   try {
     const totalLessons = await db.getFirstAsync(
       'SELECT COUNT(*) as count FROM lessons WHERE level_id = ?',
       [levelId]
     );
-    
+
     const completedLessons = await db.getFirstAsync(
-      `SELECT COUNT(DISTINCT l.id) as count 
-       FROM lessons l 
-       JOIN user_progress up ON l.id = up.lesson_id 
-       WHERE l.level_id = ? AND up.is_completed = 1`,
-      [levelId]
+      `SELECT COUNT(DISTINCT l.id) as count
+       FROM lessons l
+       JOIN user_progress up ON l.id = up.lesson_id
+       WHERE l.level_id = ? AND up.user_id = ? AND up.is_completed = 1`,
+      [levelId, userId]
     );
-    
+
     return {
       total: totalLessons?.count || 0,
       completed: completedLessons?.count || 0,
@@ -268,5 +313,204 @@ export const getLevelProgress = async (levelId) => {
   } catch (error) {
     console.error('Error getting level progress:', error);
     return { total: 0, completed: 0, percentage: 0 };
+  }
+};
+
+export const createUser = async (email, passwordHash, firstName, lastName) => {
+  try {
+    const result = await db.runAsync(
+      `INSERT INTO users (email, password_hash, first_name, last_name)
+       VALUES (?, ?, ?, ?)`,
+      [email, passwordHash, firstName, lastName]
+    );
+    return result.lastInsertRowId;
+  } catch (error) {
+    console.error('Error creating user:', error);
+    throw error;
+  }
+};
+
+export const getUserByEmail = async (email) => {
+  try {
+    return await db.getFirstAsync('SELECT * FROM users WHERE email = ? AND is_active = 1', [email]);
+  } catch (error) {
+    console.error('Error getting user by email:', error);
+    return null;
+  }
+};
+
+export const getUserById = async (userId) => {
+  try {
+    return await db.getFirstAsync('SELECT * FROM users WHERE id = ? AND is_active = 1', [userId]);
+  } catch (error) {
+    console.error('Error getting user by ID:', error);
+    return null;
+  }
+};
+
+// User-specific download functions
+export const saveUserDownload = async (userId, lessonId, localFilePath, fileSize = 0) => {
+  try {
+    await db.runAsync(
+      `INSERT OR REPLACE INTO user_downloads
+       (user_id, lesson_id, local_file_path, is_downloaded, downloaded_at, file_size)
+       VALUES (?, ?, ?, 1, datetime('now'), ?)`,
+      [userId, lessonId, localFilePath, fileSize]
+    );
+    console.log('User download saved successfully');
+  } catch (error) {
+    console.error('Error saving user download:', error);
+  }
+};
+
+export const getUserDownload = async (userId, lessonId) => {
+  try {
+    return await db.getFirstAsync(
+      'SELECT * FROM user_downloads WHERE user_id = ? AND lesson_id = ?',
+      [userId, lessonId]
+    );
+  } catch (error) {
+    console.error('Error getting user download:', error);
+    return null;
+  }
+};
+
+export const getUserDownloads = async (userId) => {
+  try {
+    return await db.getAllAsync(
+      'SELECT * FROM user_downloads WHERE user_id = ? AND is_downloaded = 1',
+      [userId]
+    );
+  } catch (error) {
+    console.error('Error getting user downloads:', error);
+    return [];
+  }
+};
+
+export const deleteUserDownload = async (userId, lessonId) => {
+  try {
+    await db.runAsync(
+      'DELETE FROM user_downloads WHERE user_id = ? AND lesson_id = ?',
+      [userId, lessonId]
+    );
+    console.log('User download deleted successfully');
+  } catch (error) {
+    console.error('Error deleting user download:', error);
+  }
+};
+
+export const getUserDownloadSize = async (userId) => {
+  try {
+    const result = await db.getFirstAsync(
+      'SELECT SUM(file_size) as total_size, COUNT(*) as file_count FROM user_downloads WHERE user_id = ? AND is_downloaded = 1',
+      [userId]
+    );
+    return {
+      totalSize: result?.total_size || 0,
+      fileCount: result?.file_count || 0
+    };
+  } catch (error) {
+    console.error('Error getting user download size:', error);
+    return { totalSize: 0, fileCount: 0 };
+  }
+};
+
+export const clearUserDownloads = async (userId) => {
+  try {
+    await db.runAsync(
+      'DELETE FROM user_downloads WHERE user_id = ?',
+      [userId]
+    );
+    console.log('User downloads cleared successfully');
+  } catch (error) {
+    console.error('Error clearing user downloads:', error);
+  }
+};
+
+// Functions for inserting content from Bubble
+export const insertLevelFromBubble = async (bubbleLevel) => {
+  try {
+    await db.runAsync(
+      `INSERT OR REPLACE INTO levels (id, title, description, order_index, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        bubbleLevel._id,
+        bubbleLevel.title,
+        bubbleLevel.description,
+        bubbleLevel.order_index || 0,
+        bubbleLevel.Created_Date || new Date().toISOString()
+      ]
+    );
+    console.log(`Level "${bubbleLevel.title}" inserted successfully`);
+  } catch (error) {
+    console.error('Error inserting level from Bubble:', error);
+  }
+};
+
+export const insertLessonFromBubble = async (bubbleLesson) => {
+  try {
+    await db.runAsync(
+      `INSERT OR REPLACE INTO lessons
+       (id, level_id, title, description, content, download_url, order_index, estimated_duration, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        bubbleLesson._id,
+        bubbleLesson.level_id._id || bubbleLesson.level_id,
+        bubbleLesson.title,
+        bubbleLesson.description,
+        bubbleLesson.content,
+        bubbleLesson.download_url,
+        bubbleLesson.order_index || 0,
+        bubbleLesson.estimated_duration || 30,
+        bubbleLesson.Created_Date || new Date().toISOString()
+      ]
+    );
+    console.log(`Lesson "${bubbleLesson.title}" inserted successfully`);
+  } catch (error) {
+    console.error('Error inserting lesson from Bubble:', error);
+  }
+};
+
+export const insertQuizFromBubble = async (bubbleQuiz) => {
+  try {
+    await db.runAsync(
+      `INSERT OR REPLACE INTO quizzes (id, lesson_id, title, questions, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        bubbleQuiz._id,
+        bubbleQuiz.lesson_id._id || bubbleQuiz.lesson_id,
+        bubbleQuiz.title,
+        typeof bubbleQuiz.questions === 'string' ? bubbleQuiz.questions : JSON.stringify(bubbleQuiz.questions),
+        bubbleQuiz.Created_Date || new Date().toISOString()
+      ]
+    );
+    console.log(`Quiz "${bubbleQuiz.title}" inserted successfully`);
+  } catch (error) {
+    console.error('Error inserting quiz from Bubble:', error);
+  }
+};
+
+export const insertJobFromBubble = async (bubbleJob) => {
+  try {
+    await db.runAsync(
+      `INSERT OR REPLACE INTO jobs
+       (id, title, company, description, requirements, salary_range, location, required_level, is_active, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        bubbleJob._id,
+        bubbleJob.title,
+        bubbleJob.company,
+        bubbleJob.description,
+        bubbleJob.requirements,
+        bubbleJob.salary_range,
+        bubbleJob.location,
+        bubbleJob.required_level._id || bubbleJob.required_level,
+        bubbleJob.is_active !== false ? 1 : 0,
+        bubbleJob.Created_Date || new Date().toISOString()
+      ]
+    );
+    console.log(`Job "${bubbleJob.title}" inserted successfully`);
+  } catch (error) {
+    console.error('Error inserting job from Bubble:', error);
   }
 };

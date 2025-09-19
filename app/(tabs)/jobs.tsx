@@ -258,13 +258,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   jobCard: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface, // White background like CourseCard
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.medium,
+    marginVertical: spacing.sm,
+    marginHorizontal: spacing.md,
+    ...shadows.card, // Card shadow like CourseCard
   },
   jobHeader: {
     marginBottom: spacing.md,

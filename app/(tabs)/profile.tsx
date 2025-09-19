@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Alert, TouchableOpacity, Modal, Platform, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TopAppBar } from '@/src/components/ui/TopAppBar';
 import { Button } from '@/src/components/ui/Button';
 import { ProgressBar } from '@/src/components/ui/ProgressBar';
-import { 
-  getCompletedLessonsCount, 
-  getAllLevels, 
+import { useAuth } from '@/src/contexts/AuthContext';
+import {
+  getCompletedLessonsCount,
+  getAllLevels,
   getLevelProgress
 } from '@/src/db/index';
 import { getDownloadedLessonsSize as getDownloadSize, clearAllDownloads } from '@/src/services/downloadManager';
@@ -23,6 +24,7 @@ interface UserStats {
 }
 
 export default function ProfileScreen() {
+  const { user, logout } = useAuth();
   const [userStats, setUserStats] = useState<UserStats>({
     completedLessons: 0,
     totalLessons: 0,
@@ -32,42 +34,68 @@ export default function ProfileScreen() {
     downloadedCount: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  const settingsRotation = React.useRef(new Animated.Value(0)).current;
 
   const loadUserStats = async () => {
     try {
       setLoading(true);
-      
-      const completedCount = await getCompletedLessonsCount();
-      const levels = await getAllLevels();
-      
-      // Calculate total lessons across all levels
-      let totalLessons = 0;
-      const levelProgressData = await Promise.all(
-        levels.map(async (level) => {
-          const progress = await getLevelProgress(level.id);
-          totalLessons += progress.total;
-          return {
-            ...level,
-            ...progress,
-          };
-        })
-      );
 
-      // Determine current level (assuming 2 lessons per level)
-      const lessonsPerLevel = 2;
-      const currentLevel = Math.min(Math.floor(completedCount / lessonsPerLevel) + 1, 4);
+      // If user has progress/storage data from Bubble login, use it
+      if (user?.progress && user?.storage) {
+        console.log('Using progress data from Bubble login:', user.progress, user.storage);
 
-      // Get download statistics
-      const downloadStats = await getDownloadSize();
+        const levels = await getAllLevels();
+        const levelProgressData = await Promise.all(
+          levels.map(async (level) => {
+            const progress = await getLevelProgress(level.id);
+            return {
+              ...level,
+              ...progress,
+            };
+          })
+        );
 
-      setUserStats({
-        completedLessons: completedCount,
-        totalLessons,
-        currentLevel,
-        levelProgress: levelProgressData,
-        downloadedSize: downloadStats.formattedSize,
-        downloadedCount: downloadStats.fileCount,
-      });
+        setUserStats({
+          completedLessons: user.progress.completedLessons || 0,
+          totalLessons: user.progress.totalLessons || 8,
+          currentLevel: user.currentLevel || 1,
+          levelProgress: levelProgressData,
+          downloadedSize: user.storage.downloadedSize || '0 B',
+          downloadedCount: user.storage.downloadedCount || 0,
+        });
+      } else {
+        // Fallback to local data if no Bubble data available
+        const completedCount = await getCompletedLessonsCount();
+        const levels = await getAllLevels();
+
+        let totalLessons = 0;
+        const levelProgressData = await Promise.all(
+          levels.map(async (level) => {
+            const progress = await getLevelProgress(level.id);
+            totalLessons += progress.total;
+            return {
+              ...level,
+              ...progress,
+            };
+          })
+        );
+
+        const lessonsPerLevel = 2;
+        const currentLevel = Math.min(Math.floor(completedCount / lessonsPerLevel) + 1, 4);
+
+        const downloadStats = await getDownloadSize();
+
+        setUserStats({
+          completedLessons: completedCount,
+          totalLessons,
+          currentLevel,
+          levelProgress: levelProgressData,
+          downloadedSize: downloadStats.formattedSize,
+          downloadedCount: downloadStats.fileCount,
+        });
+      }
     } catch (error) {
       console.error('Error loading user stats:', error);
     } finally {
@@ -111,7 +139,31 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleLogout = () => {
+    console.log('Logout button pressed');
+    // Use modal for consistent experience across platforms
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = async () => {
+    setShowLogoutModal(false);
+    try {
+      await logout();
+      console.log('Logout completed');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
   const handleSettings = () => {
+    Animated.timing(settingsRotation, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      settingsRotation.setValue(0);
+    });
+
     Alert.alert(
       'Settings',
       'Settings panel is coming soon! Here you\'ll be able to manage notifications, account preferences, and more.',
@@ -151,13 +203,29 @@ export default function ProfileScreen() {
       <TopAppBar 
         title="Profile" 
         rightComponent={
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={handleSettings}
             style={styles.settingsButton}
             accessibilityLabel="Settings"
             accessibilityRole="button"
           >
-            <Text style={styles.settingsIcon}>⚙️</Text>
+            <Animated.Text
+              style={[
+                styles.settingsIcon,
+                {
+                  transform: [
+                    {
+                      rotate: settingsRotation.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ['0deg', '180deg'],
+                      })
+                    }
+                  ]
+                }
+              ]}
+            >
+              ⚙️
+            </Animated.Text>
           </TouchableOpacity>
         }
       />
@@ -168,9 +236,14 @@ export default function ProfileScreen() {
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>👤</Text>
           </View>
-          <Text style={styles.userName}>BalangaAI Student</Text>
+          <Text style={styles.userName}>
+            {user?.first_name && user?.last_name
+              ? `${user.first_name} ${user.last_name}`
+              : user?.email || 'BalangaAI Student'
+            }
+          </Text>
           <Text style={styles.userLevel}>
-            Current Level: {getLevelName(userStats.currentLevel)}
+            Current Level: {user?.levelName || getLevelName(userStats.currentLevel)}
           </Text>
         </View>
 
@@ -221,7 +294,7 @@ export default function ProfileScreen() {
               Complete all lessons in a level to earn your certificate!
             </Text>
             <Text style={styles.certificateCount}>
-              Earned: {userStats.levelProgress.filter(level => level.percentage === 100).length} of 4
+              Earned: {user?.progress?.certificates || userStats.levelProgress.filter(level => level.percentage === 100).length} of 4
             </Text>
           </View>
         </View>
@@ -255,18 +328,56 @@ export default function ProfileScreen() {
           <Button
             title="Export Progress"
             onPress={handleExportProgress}
-            variant="tertiary"
+            variant="secondary"
             style={styles.actionButton}
           />
-          
+
           <Button
             title="Settings"
             onPress={handleSettings}
-            variant="tertiary"
+            variant="primary"
+            style={styles.actionButton}
+          />
+
+          <Button
+            title="Sign Out"
+            onPress={handleLogout}
+            variant="danger"
             style={styles.actionButton}
           />
         </View>
       </ScrollView>
+
+      {/* Logout Confirmation Modal */}
+      <Modal
+        visible={showLogoutModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowLogoutModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Sign Out</Text>
+            <Text style={styles.modalMessage}>
+              Are you sure you want to sign out?
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setShowLogoutModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={confirmLogout}
+              >
+                <Text style={styles.confirmButtonText}>Sign Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -361,7 +472,7 @@ const styles = StyleSheet.create({
     paddingTop: 0,
   },
   levelCard: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     padding: spacing.lg,
     marginBottom: spacing.md,
@@ -452,5 +563,58 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     marginBottom: spacing.md,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    padding: spacing.xl,
+    margin: spacing.lg,
+    minWidth: 280,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    ...typography.h3,
+    color: colors.textPrimary,
+    marginBottom: spacing.sm,
+  },
+  modalMessage: {
+    ...typography.body1,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.xl,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  modalButton: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  confirmButton: {
+    backgroundColor: colors.error,
+  },
+  cancelButtonText: {
+    ...typography.button,
+    color: colors.textPrimary,
+  },
+  confirmButtonText: {
+    ...typography.button,
+    color: colors.background,
   },
 });

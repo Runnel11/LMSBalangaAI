@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { colors, typography, spacing, borderRadius, shadows } from '@/src/config/theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
@@ -26,13 +26,43 @@ export const LessonCard: React.FC<LessonCardProps> = ({
   onDownload,
   accessibilityLabel,
 }) => {
+  const scaleAnim = React.useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.98,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
   return (
-    <TouchableOpacity
-      style={[styles.container, isCompleted && styles.completedContainer]}
-      onPress={onPress}
-      accessibilityLabel={accessibilityLabel || `Lesson ${order}: ${title}, ${duration} minutes, ${isCompleted ? 'completed' : 'not completed'}`}
-      accessibilityRole="button"
+    <Animated.View
+      style={[
+        {
+          transform: [{ scale: scaleAnim }]
+        }
+      ]}
     >
+      <TouchableOpacity
+        style={[styles.container, isCompleted && styles.completedContainer]}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        accessibilityLabel={accessibilityLabel || `Lesson ${order}: ${title}, ${duration} minutes, ${isCompleted ? 'completed' : 'not completed'}`}
+        accessibilityRole="button"
+        activeOpacity={1}
+      >
       <View style={styles.header}>
         <View style={styles.orderContainer}>
           <Text style={styles.orderText}>{order}</Text>
@@ -50,20 +80,21 @@ export const LessonCard: React.FC<LessonCardProps> = ({
         <View style={styles.actions}>
           {isCompleted && (
             <View style={styles.completedBadge}>
-              <IconSymbol name="checkmark.circle.fill" size={20} color={colors.success} />
+              <IconSymbol name="checkmark.circle.fill" size={16} color={colors.surface} />
+              <Text style={styles.completedText}>COMPLETED</Text>
             </View>
           )}
-          
+
           <TouchableOpacity
             style={styles.downloadButton}
             onPress={onDownload}
             accessibilityLabel={isDownloaded ? 'Downloaded' : 'Download lesson'}
             accessibilityRole="button"
           >
-            <IconSymbol 
-              name={isDownloaded ? "icloud.and.arrow.down.fill" : "icloud.and.arrow.down"} 
-              size={20} 
-              color={isDownloaded ? colors.success : colors.textSecondary} 
+            <IconSymbol
+              name={isDownloaded ? "icloud.and.arrow.down.fill" : "icloud.and.arrow.down"}
+              size={20}
+              color={isDownloaded ? colors.success : colors.textSecondary}
             />
           </TouchableOpacity>
         </View>
@@ -83,12 +114,13 @@ export const LessonCard: React.FC<LessonCardProps> = ({
         )}
       </View>
     </TouchableOpacity>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     padding: spacing.md,
     marginVertical: spacing.xs,
@@ -135,12 +167,24 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   actions: {
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: spacing.sm,
   },
   completedBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: colors.success,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.lg,
+    gap: spacing.xs,
+  },
+  completedText: {
+    ...typography.caption,
+    color: colors.surface,
+    fontWeight: '700',
+    fontSize: 10,
+    letterSpacing: 0.5,
   },
   downloadButton: {
     width: 32,

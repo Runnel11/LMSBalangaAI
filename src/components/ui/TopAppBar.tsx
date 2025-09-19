@@ -1,8 +1,8 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, typography, spacing } from '@/src/config/theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { colors, spacing, typography } from '@/src/config/theme';
+import React from 'react';
+import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface TopAppBarProps {
   title: string;
@@ -32,7 +32,8 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                 accessibilityLabel="Go back"
                 accessibilityRole="button"
               >
-                <IconSymbol name="chevron.left" size={24} color={colors.textPrimary} />
+                <IconSymbol name="chevron.left" size={24} color={colors.primary} />
+                <Text>Back</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -74,6 +75,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: -spacing.sm,
+    color: colors.primary,
   },
   titleSection: {
     flex: 1,

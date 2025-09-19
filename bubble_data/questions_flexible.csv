@@ -1,0 +1,20 @@
+quiz_id,question_text,options,correct_answer,order_index
+1,What does AI stand for?,"["Artificial Intelligence"",""Automated Intelligence"",""Advanced Intelligence"",""Applied Intelligence""]",0,1
+1,Which of these is an AI application?,"[""Calculator"",""Voice Assistant"",""Word Processor"",""Email Client""]",1,2
+2,What is supervised learning?,"[""Learning without data"",""Learning with labeled data"",""Learning with unlabeled data"",""Learning without algorithms""]",1,1
+2,Which algorithm is used for classification?,"[""Linear Regression"",""Decision Trees"",""K-means"",""PCA""]",1,2
+2,What is the primary goal of machine learning?,"[""Replace humans"",""Learn patterns from data"",""Store information"",""Calculate numbers"",""Process text""]",1,3
+3,What is the main benefit of AI chatbots?,"[""They never make mistakes"",""24/7 availability"",""They replace all humans"",""They are free""]",1,1
+3,What is sentiment analysis?,"[""Analyzing customer emotions"",""Counting words"",""Translation service"",""Voice recognition""]",0,2
+3,Which metric measures chatbot success?,"[""Speed only"",""Customer satisfaction"",""Number of responses""]",1,3
+4,What is NLP in chatbots?,"[""Natural Language Processing"",""Neural Language Programming"",""Network Language Protocol"",""New Language Parser""]",0,1
+4,Which platform is commonly used for chatbots?,"[""Excel"",""PowerPoint"",""Dialogflow"",""Paint""]",2,2
+5,What is RPA?,"[""Robotic Process Automation"",""Random Process Analysis"",""Real Process Application"",""Rapid Process Assessment""]",0,1
+5,Which process is best for automation?,"[""Creative tasks"",""Repetitive tasks"",""Strategic planning"",""Team meetings""]",1,2
+5,What should be automated first?,"[""Complex decisions"",""High-volume repetitive tasks"",""Creative work"",""Customer relationships"",""Strategic planning""]",1,3
+6,What is predictive analytics?,"[""Analyzing past data"",""Forecasting future trends"",""Cleaning data"",""Storing data""]",1,1
+6,Which tool is used for data visualization?,"[""Notepad"",""Tableau"",""Calculator"",""Clock""]",1,2
+7,What should come first in AI strategy?,"[""Buying technology"",""Hiring developers"",""Understanding business needs"",""Training employees""]",2,1
+7,What is change management?,"[""Counting coins"",""Managing organizational transitions"",""Changing passwords"",""Updating software""]",1,2
+8,What is crucial for AI project success?,"[""Expensive hardware"",""Stakeholder buy-in"",""Perfect algorithms"",""Large datasets""]",1,1
+8,How should AI projects be approached?,"[""Big bang implementation"",""Iterative development"",""One-time deployment"",""Theoretical planning""]",1,2

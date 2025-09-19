@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 
 import { TopAppBar } from '@/src/components/ui/TopAppBar';
 import { Button } from '@/src/components/ui/Button';
@@ -21,6 +22,7 @@ interface CommunityPost {
 export default function CommunityScreen() {
   const [activeTab, setActiveTab] = useState<'discussions' | 'events' | 'resources'>('discussions');
   const [searchQuery, setSearchQuery] = useState('');
+  const router = useRouter();
 
   // Mock data - in a real app, this would come from an API
   const mockPosts: CommunityPost[] = [
@@ -147,7 +149,7 @@ export default function CommunityScreen() {
           <TouchableOpacity
             key={post.id}
             style={styles.postCard}
-            onPress={() => Alert.alert('View Post', 'Post details would open here.')}
+            onPress={() => router.push(`/community/${post.id}`)}
             accessibilityLabel={`Post by ${post.author}: ${post.title}`}
             accessibilityRole="button"
           >
@@ -332,12 +334,12 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   postCard: {
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
+    backgroundColor: colors.surface, // White background like CourseCard
+    borderRadius: borderRadius.lg, // Larger border radius like CourseCard
     padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.small,
+    marginVertical: spacing.sm,
+    marginHorizontal: spacing.md,
+    ...shadows.card, // Card shadow like CourseCard
   },
   postHeader: {
     flexDirection: 'row',
@@ -391,7 +393,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   eventCard: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     padding: spacing.lg,
     marginBottom: spacing.md,
@@ -421,7 +423,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   resourceCard: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     padding: spacing.lg,
     marginBottom: spacing.md,

@@ -9,16 +9,16 @@ const initializeDBModule = async () => {
   try {
     if (Platform.OS === 'web') {
       // Import web implementation
-      dbModule = await import('./webDb.js');
+      dbModule = await import('./webDb');
     } else {
       // Import mobile implementation
-      dbModule = await import('./mobileDb.js');
+      dbModule = await import('./mobileDb');
     }
     return dbModule;
   } catch (error) {
     console.error('Error importing database module:', error);
     // Fallback to web implementation
-    dbModule = await import('./webDb.js');
+    dbModule = await import('./webDb');
     return dbModule;
   }
 };
@@ -82,4 +82,19 @@ export const getCompletedLessonsCount = async () => {
 export const getLevelProgress = async (levelId) => {
   const db = await initializeDBModule();
   return db.getLevelProgress(levelId);
+};
+
+export const createUser = async (email, passwordHash, firstName, lastName) => {
+  const db = await initializeDBModule();
+  return db.createUser(email, passwordHash, firstName, lastName);
+};
+
+export const getUserByEmail = async (email) => {
+  const db = await initializeDBModule();
+  return db.getUserByEmail(email);
+};
+
+export const getUserById = async (userId) => {
+  const db = await initializeDBModule();
+  return db.getUserById(userId);
 };

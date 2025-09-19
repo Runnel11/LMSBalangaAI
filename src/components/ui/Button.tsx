@@ -1,11 +1,11 @@
 import React from 'react';
-import { TouchableOpacity, Text, ActivityIndicator, ViewStyle, TextStyle } from 'react-native';
+import { TouchableOpacity, Text, ActivityIndicator, ViewStyle, TextStyle, Animated } from 'react-native';
 import { colors, typography, spacing, borderRadius } from '@/src/config/theme';
 
 interface ButtonProps {
   title: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'tertiary';
+  variant?: 'primary' | 'secondary' | 'tertiary' | 'danger';
   size?: 'small' | 'medium' | 'large';
   disabled?: boolean;
   loading?: boolean;
@@ -25,6 +25,40 @@ export const Button: React.FC<ButtonProps> = ({
   style,
   textStyle,
 }) => {
+  const scaleAnim = React.useRef(new Animated.Value(1)).current;
+  const opacityAnim = React.useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 0.95,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 0.8,
+        duration: 100,
+        useNativeDriver: true,
+      })
+    ]).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      })
+    ]).start();
+  };
   const getButtonStyle = (): ViewStyle => {
     const baseStyle: ViewStyle = {
       borderRadius: borderRadius.md,
@@ -54,15 +88,20 @@ export const Button: React.FC<ButtonProps> = ({
 
     const variantStyles = {
       primary: {
-        backgroundColor: disabled ? colors.border : colors.primary,
+        backgroundColor: disabled ? colors.disabled : colors.primary,
       },
       secondary: {
-        backgroundColor: disabled ? colors.surface : colors.secondary,
+        backgroundColor: disabled ? colors.disabled : colors.secondary,
       },
       tertiary: {
         backgroundColor: 'transparent',
         borderWidth: 1,
         borderColor: disabled ? colors.border : colors.primary,
+      },
+      danger: {
+        backgroundColor: 'transparent',
+        borderWidth: 1,
+        borderColor: disabled ? colors.border : colors.error,
       },
     };
 
@@ -75,26 +114,28 @@ export const Button: React.FC<ButtonProps> = ({
 
   const getTextStyle = (): TextStyle => {
     const baseStyle: TextStyle = {
-      ...typography.body1,
-      fontWeight: '600',
+      ...typography.button, // 14px / Manrope Bold / Uppercase
       textAlign: 'center',
     };
 
     const sizeStyles = {
-      small: { fontSize: 14 },
-      medium: { fontSize: 16 },
-      large: { fontSize: 18 },
+      small: { fontSize: 12 },
+      medium: { fontSize: 14 }, // Standard button text size
+      large: { fontSize: 16 },
     };
 
     const variantStyles = {
       primary: {
-        color: disabled ? colors.textSecondary : colors.background,
+        color: disabled ? colors.disabledText : colors.surface, // White text on primary
       },
       secondary: {
-        color: disabled ? colors.textSecondary : colors.textPrimary,
+        color: disabled ? colors.disabledText : colors.surface, // White text on secondary
       },
       tertiary: {
-        color: disabled ? colors.textSecondary : colors.primary,
+        color: disabled ? colors.disabledText : colors.primary, // Primary color text
+      },
+      danger: {
+        color: disabled ? colors.disabledText : colors.error, // Error color text
       },
     };
 
@@ -106,22 +147,35 @@ export const Button: React.FC<ButtonProps> = ({
   };
 
   return (
-    <TouchableOpacity
-      style={[getButtonStyle(), style]}
-      onPress={onPress}
-      disabled={disabled || loading}
-      accessibilityLabel={accessibilityLabel || title}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: disabled || loading }}
+    <Animated.View
+      style={[
+        {
+          transform: [{ scale: scaleAnim }],
+          opacity: opacityAnim
+        }
+      ]}
     >
-      {loading && (
-        <ActivityIndicator
-          size="small"
-          color={variant === 'primary' ? colors.background : colors.primary}
-          style={{ marginRight: spacing.sm }}
-        />
-      )}
-      <Text style={[getTextStyle(), textStyle]}>{title}</Text>
-    </TouchableOpacity>
+      <TouchableOpacity
+        style={[getButtonStyle(), style]}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        disabled={disabled || loading}
+        accessibilityLabel={accessibilityLabel || title}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: disabled || loading }}
+        activeOpacity={1}
+      >
+        {loading && (
+          <ActivityIndicator
+            size="small"
+            color={variant === 'primary' || variant === 'secondary' ? colors.background :
+                   variant === 'danger' ? colors.error : colors.primary}
+            style={{ marginRight: spacing.sm }}
+          />
+        )}
+        <Text style={[getTextStyle(), textStyle]}>{title}</Text>
+      </TouchableOpacity>
+    </Animated.View>
   );
 };
