@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { TopAppBar } from '@/src/components/ui/TopAppBar';
 import { CourseCard } from '@/src/components/ui/CourseCard';
 import { OfflineIndicator } from '@/src/components/ui/OfflineIndicator';
-import { getAllLevels, getLevelProgress } from '@/src/db/index';
-import { colors, typography, spacing } from '@/src/config/theme';
+import { TopAppBar } from '@/src/components/ui/TopAppBar';
+import { colors, spacing, typography } from '@/src/config/theme';
 import { useOffline } from '@/src/contexts/OfflineContext';
+import { getAllLevels, getLevelProgress } from '@/src/db/index';
 
 export default function HomeScreen() {
   const [levels, setLevels] = useState([]);
@@ -68,6 +69,13 @@ export default function HomeScreen() {
   useEffect(() => {
     loadLevelsWithProgress();
   }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadLevelsWithProgress();
+      return () => {};
+    }, [])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);

@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import { createContext, useContext, useEffect, useState } from 'react';
+import { Platform } from 'react-native';
+import { repairProgressData, setCurrentUserId } from '../db/index';
 import { bubbleApi } from '../services/bubbleApi';
 import { syncService } from '../services/syncService';
 
@@ -84,6 +85,11 @@ export const AuthProvider = ({ children }) => {
         setAuthToken(token);
         setUser(parsedUser);
         setIsAuthenticated(true);
+        // Scope DB operations to this user
+  const uid = parsedUser.id || parsedUser._id || 1;
+  setCurrentUserId(uid);
+  // Attempt to repair any legacy progress rows
+  repairProgressData();
       }
     } catch (error) {
       console.error('Error checking stored auth:', error);
@@ -113,6 +119,9 @@ export const AuthProvider = ({ children }) => {
         setAuthToken(result.token);
         setUser(result.user);
         setIsAuthenticated(true);
+  const uid = result.user.id || result.user._id || 1;
+  setCurrentUserId(uid);
+  repairProgressData();
 
         return { success: true };
       } else {
@@ -151,6 +160,9 @@ export const AuthProvider = ({ children }) => {
         setAuthToken(result.token);
         setUser(result.user);
         setIsAuthenticated(true);
+  const uid = result.user.id || result.user._id || 1;
+  setCurrentUserId(uid);
+  repairProgressData();
 
         return { success: true };
       } else {
@@ -185,6 +197,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setIsAuthenticated(false);
       setAuthToken(null);
+  setCurrentUserId(null);
 
       // Clear token from API service
       bubbleApi.clearAuthToken();

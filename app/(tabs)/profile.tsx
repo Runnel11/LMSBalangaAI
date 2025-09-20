@@ -1,18 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Alert, TouchableOpacity, Modal, Platform, Animated } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, Animated, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { TopAppBar } from '@/src/components/ui/TopAppBar';
 import { Button } from '@/src/components/ui/Button';
 import { ProgressBar } from '@/src/components/ui/ProgressBar';
+import { TopAppBar } from '@/src/components/ui/TopAppBar';
+import { borderRadius, colors, shadows, spacing, typography } from '@/src/config/theme';
 import { useAuth } from '@/src/contexts/AuthContext';
-import {
-  getCompletedLessonsCount,
-  getAllLevels,
-  getLevelProgress
-} from '@/src/db/index';
-import { getDownloadedLessonsSize as getDownloadSize, clearAllDownloads } from '@/src/services/downloadManager';
-import { colors, typography, spacing, borderRadius, shadows } from '@/src/config/theme';
+import { getAllLevels, getCompletedLessonsCount, getLevelProgress } from '@/src/db/index';
+import { clearAllDownloads, getDownloadedLessonsSize as getDownloadSize } from '@/src/services/downloadManager';
+import { useFocusEffect } from '@react-navigation/native';
 
 interface UserStats {
   completedLessons: number;
@@ -41,61 +38,35 @@ export default function ProfileScreen() {
   const loadUserStats = async () => {
     try {
       setLoading(true);
+      // Always prefer local DB counts for accuracy
+      const completedCount = await getCompletedLessonsCount();
+      const levels = await getAllLevels();
 
-      // If user has progress/storage data from Bubble login, use it
-      if (user?.progress && user?.storage) {
-        console.log('Using progress data from Bubble login:', user.progress, user.storage);
+      let totalLessons = 0;
+      const levelProgressData = await Promise.all(
+        levels.map(async (level) => {
+          const progress = await getLevelProgress(level.id);
+          totalLessons += progress.total;
+          return {
+            ...level,
+            ...progress,
+          };
+        })
+      );
 
-        const levels = await getAllLevels();
-        const levelProgressData = await Promise.all(
-          levels.map(async (level) => {
-            const progress = await getLevelProgress(level.id);
-            return {
-              ...level,
-              ...progress,
-            };
-          })
-        );
+      const lessonsPerLevel = 2;
+      const currentLevel = Math.min(Math.floor(completedCount / lessonsPerLevel) + 1, levels.length || 4);
 
-        setUserStats({
-          completedLessons: user.progress.completedLessons || 0,
-          totalLessons: user.progress.totalLessons || 8,
-          currentLevel: user.currentLevel || 1,
-          levelProgress: levelProgressData,
-          downloadedSize: user.storage.downloadedSize || '0 B',
-          downloadedCount: user.storage.downloadedCount || 0,
-        });
-      } else {
-        // Fallback to local data if no Bubble data available
-        const completedCount = await getCompletedLessonsCount();
-        const levels = await getAllLevels();
+      const downloadStats = await getDownloadSize();
 
-        let totalLessons = 0;
-        const levelProgressData = await Promise.all(
-          levels.map(async (level) => {
-            const progress = await getLevelProgress(level.id);
-            totalLessons += progress.total;
-            return {
-              ...level,
-              ...progress,
-            };
-          })
-        );
-
-        const lessonsPerLevel = 2;
-        const currentLevel = Math.min(Math.floor(completedCount / lessonsPerLevel) + 1, 4);
-
-        const downloadStats = await getDownloadSize();
-
-        setUserStats({
-          completedLessons: completedCount,
-          totalLessons,
-          currentLevel,
-          levelProgress: levelProgressData,
-          downloadedSize: downloadStats.formattedSize,
-          downloadedCount: downloadStats.fileCount,
-        });
-      }
+      setUserStats({
+        completedLessons: completedCount,
+        totalLessons,
+        currentLevel,
+        levelProgress: levelProgressData,
+        downloadedSize: downloadStats.formattedSize,
+        downloadedCount: downloadStats.fileCount,
+      });
     } catch (error) {
       console.error('Error loading user stats:', error);
     } finally {
@@ -106,6 +77,12 @@ export default function ProfileScreen() {
   useEffect(() => {
     loadUserStats();
   }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      loadUserStats();
+      return () => {};
+    }, [])
+  );
 
   const handleClearDownloads = () => {
     Alert.alert(

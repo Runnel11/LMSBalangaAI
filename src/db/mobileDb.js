@@ -427,6 +427,26 @@ export const clearUserDownloads = async (userId) => {
   }
 };
 
+// Repair legacy progress rows saved before user scoping was added
+export const repairProgressData = async (userId) => {
+  try {
+    if (!userId) return { updated: 0 };
+    const result = await db.runAsync(
+      `UPDATE user_progress
+       SET lesson_id = user_id, user_id = ?
+       WHERE lesson_id IS NULL AND (quiz_id IS NULL OR quiz_id = 0)
+       AND user_id IN (SELECT id FROM lessons)`,
+      [userId]
+    );
+    // result.changes may be available depending on expo-sqlite version
+    console.log('Repaired legacy progress rows');
+    return { updated: result?.changes ?? 0 };
+  } catch (error) {
+    console.error('Error repairing progress data:', error);
+    return { updated: 0, error };
+  }
+};
+
 // Functions for inserting content from Bubble
 export const insertLevelFromBubble = async (bubbleLevel) => {
   try {

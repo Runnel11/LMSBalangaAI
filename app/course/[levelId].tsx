@@ -1,24 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Alert, RefreshControl } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router } from 'expo-router';
 
-import { TopAppBar } from '@/src/components/ui/TopAppBar';
 import { Button } from '@/src/components/ui/Button';
 import { LessonCard } from '@/src/components/ui/LessonCard';
 import { ProgressBar } from '@/src/components/ui/ProgressBar';
-import { 
-  getLevelById, 
-  getLessonsByLevel, 
-  getProgress, 
-  getLevelProgress 
+import { TopAppBar } from '@/src/components/ui/TopAppBar';
+import { colors, spacing, typography } from '@/src/config/theme';
+import {
+  getLessonsByLevel,
+  getLevelById,
+  getLevelProgress,
+  getProgress
 } from '@/src/db/index';
-import { 
-  downloadLesson, 
+import {
   downloadAllLessonsInLevel,
-  getLocalLessonContent 
+  downloadLesson
 } from '@/src/services/downloadManager';
-import { colors, typography, spacing } from '@/src/config/theme';
 
 export default function CourseLevelScreen() {
   const { levelId } = useLocalSearchParams();
@@ -60,6 +60,15 @@ export default function CourseLevelScreen() {
       loadLevelData();
     }
   }, [levelId]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (levelId) {
+        loadLevelData();
+      }
+      return () => {};
+    }, [levelId])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);

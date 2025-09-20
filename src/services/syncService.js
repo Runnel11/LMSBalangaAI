@@ -1,17 +1,14 @@
+import {
+    getAllLevels,
+    getLessonsByLevel,
+    getProgress,
+    insertJobFromBubble,
+    insertLessonFromBubble,
+    insertLevelFromBubble,
+    insertQuizFromBubble
+} from '../db/index';
 import { bubbleApi } from './bubbleApi';
 import { networkService } from './networkService';
-import {
-  getAllLevels,
-  getLessonsByLevel,
-  saveProgress,
-  getProgress,
-  createUser as createLocalUser,
-  getUserById as getLocalUserById,
-  insertLevelFromBubble,
-  insertLessonFromBubble,
-  insertQuizFromBubble,
-  insertJobFromBubble
-} from '../db/index';
 
 export class SyncService {
   constructor() {
@@ -72,7 +69,7 @@ export class SyncService {
     }
 
     try {
-      const localProgress = await getProgress(userId);
+      const localProgress = await getProgress();
 
       for (const progress of localProgress) {
         await bubbleApi.syncUserProgress(userId, {

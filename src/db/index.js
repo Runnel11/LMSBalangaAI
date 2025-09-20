@@ -2,6 +2,11 @@ import { Platform } from 'react-native';
 
 // Dynamic import with error handling to avoid bundling issues
 let dbModule = null;
+let currentUserId = null; // tracked user for mobile DBs
+
+export const setCurrentUserId = (userId) => {
+  currentUserId = userId ?? null;
+};
 
 const initializeDBModule = async () => {
   if (dbModule) return dbModule;
@@ -56,12 +61,21 @@ export const getAllLevels = async () => {
 
 export const getProgress = async (lessonId = null, quizId = null) => {
   const db = await initializeDBModule();
-  return db.getProgress(lessonId, quizId);
+  if (Platform.OS === 'web') {
+    return db.getProgress(lessonId, quizId);
+  }
+  // Mobile DB expects userId first
+  const uid = currentUserId ?? 1; // default to 1 for local anonymous user
+  return db.getProgress(uid, lessonId, quizId);
 };
 
 export const saveProgress = async (lessonId, quizId = null, score = null, isCompleted = true) => {
   const db = await initializeDBModule();
-  return db.saveProgress(lessonId, quizId, score, isCompleted);
+  if (Platform.OS === 'web') {
+    return db.saveProgress(lessonId, quizId, score, isCompleted);
+  }
+  const uid = currentUserId ?? 1;
+  return db.saveProgress(uid, lessonId, quizId, score, isCompleted);
 };
 
 export const updateLessonDownloadStatus = async (lessonId, localFilePath, isDownloaded = true) => {
@@ -76,12 +90,20 @@ export const getJobsByLevel = async (minLevel = 1) => {
 
 export const getCompletedLessonsCount = async () => {
   const db = await initializeDBModule();
-  return db.getCompletedLessonsCount();
+  if (Platform.OS === 'web') {
+    return db.getCompletedLessonsCount();
+  }
+  const uid = currentUserId ?? 1;
+  return db.getCompletedLessonsCount(uid);
 };
 
 export const getLevelProgress = async (levelId) => {
   const db = await initializeDBModule();
-  return db.getLevelProgress(levelId);
+  if (Platform.OS === 'web') {
+    return db.getLevelProgress(levelId);
+  }
+  const uid = currentUserId ?? 1;
+  return db.getLevelProgress(uid, levelId);
 };
 
 export const createUser = async (email, passwordHash, firstName, lastName) => {
@@ -97,4 +119,19 @@ export const getUserByEmail = async (email) => {
 export const getUserById = async (userId) => {
   const db = await initializeDBModule();
   return db.getUserById(userId);
+};
+
+// Repair legacy progress rows where user/lesson were swapped (mobile only)
+export const repairProgressData = async () => {
+  const db = await initializeDBModule();
+  if (Platform.OS === 'web' || typeof db.repairProgressData !== 'function') {
+    return { updated: 0 };
+  }
+  try {
+    const uid = currentUserId ?? 1;
+    return await db.repairProgressData(uid);
+  } catch (error) {
+    console.error('Error repairing progress data:', error);
+    return { updated: 0 };
+  }
 };
