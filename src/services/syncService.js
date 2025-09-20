@@ -1,4 +1,5 @@
 import { bubbleApi } from './bubbleApi';
+import { networkService } from './networkService';
 import {
   getAllLevels,
   getLessonsByLevel,
@@ -18,16 +19,14 @@ export class SyncService {
     this.syncInProgress = false;
   }
 
-  // Check network connectivity
+  // Check network connectivity using the enhanced network service
   async checkConnection() {
     try {
-      const response = await fetch('https://www.google.com/favicon.ico', {
-        method: 'HEAD',
-        timeout: 5000
-      });
-      this.isOnline = response.ok;
+      const status = await networkService.getNetworkStatus();
+      this.isOnline = status.isConnected;
       return this.isOnline;
     } catch (error) {
+      console.error('Error checking connection:', error);
       this.isOnline = false;
       return false;
     }
@@ -35,8 +34,19 @@ export class SyncService {
 
   // Sync data from Bubble to local database
   async syncFromBubble() {
-    if (this.syncInProgress || !this.isOnline) {
-      console.log('Sync skipped: in progress or offline');
+    if (this.syncInProgress) {
+      console.log('Sync skipped: already in progress');
+      return;
+    }
+
+    // Check if we should sync on current connection type
+    if (!networkService.isOnline) {
+      console.log('Sync skipped: offline');
+      return;
+    }
+
+    if (!networkService.hasReliableConnection() && !networkService.shouldSyncOnCellular()) {
+      console.log('Sync skipped: not on reliable connection and cellular sync disabled');
       return;
     }
 

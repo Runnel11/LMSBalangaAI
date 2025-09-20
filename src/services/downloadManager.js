@@ -220,13 +220,21 @@ if (Platform.OS === 'web') {
 
   const isNetworkAvailable = async () => {
     try {
-      const response = await fetch('https://www.google.com', {
-        method: 'HEAD',
-        timeout: 5000
-      });
-      return response.ok;
+      // Use the new networkService for better connectivity detection
+      const { networkService } = require('./networkService');
+      const status = await networkService.getNetworkStatus();
+      return status.isConnected;
     } catch (error) {
-      return false;
+      // Fallback to simple fetch test
+      try {
+        const response = await fetch('https://www.google.com', {
+          method: 'HEAD',
+          timeout: 5000
+        });
+        return response.ok;
+      } catch (fetchError) {
+        return false;
+      }
     }
   };
 

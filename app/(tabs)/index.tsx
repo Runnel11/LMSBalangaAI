@@ -5,32 +5,63 @@ import { router } from 'expo-router';
 
 import { TopAppBar } from '@/src/components/ui/TopAppBar';
 import { CourseCard } from '@/src/components/ui/CourseCard';
+import { OfflineIndicator } from '@/src/components/ui/OfflineIndicator';
 import { getAllLevels, getLevelProgress } from '@/src/db/index';
 import { colors, typography, spacing } from '@/src/config/theme';
+import { useOffline } from '@/src/contexts/OfflineContext';
 
 export default function HomeScreen() {
   const [levels, setLevels] = useState([]);
   const [levelsWithProgress, setLevelsWithProgress] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const { isOnline, offlineData, refreshOfflineData } = useOffline();
 
   const loadLevelsWithProgress = async () => {
     try {
-      const levelsData = await getAllLevels();
+      let levelsData;
+
+      // Try to load from local database first
+      try {
+        levelsData = await getAllLevels();
+      } catch (dbError) {
+        console.warn('Could not load from local database, trying offline cache:', dbError);
+
+        // Fallback to offline cached data
+        if (offlineData?.levels) {
+          levelsData = offlineData.levels;
+        } else {
+          throw new Error('No data available offline');
+        }
+      }
+
       const levelsWithProgressData = await Promise.all(
         levelsData.map(async (level) => {
-          const progress = await getLevelProgress(level.id);
-          return {
-            ...level,
-            progress: progress.percentage,
-            totalLessons: progress.total,
-            completedLessons: progress.completed,
-          };
+          try {
+            const progress = await getLevelProgress(level.id);
+            return {
+              ...level,
+              progress: progress.percentage,
+              totalLessons: progress.total,
+              completedLessons: progress.completed,
+            };
+          } catch (progressError) {
+            console.warn(`Could not load progress for level ${level.id}:`, progressError);
+            return {
+              ...level,
+              progress: 0,
+              totalLessons: 0,
+              completedLessons: 0,
+            };
+          }
         })
       );
       setLevels(levelsData);
       setLevelsWithProgress(levelsWithProgressData);
     } catch (error) {
       console.error('Error loading levels:', error);
+      // Set empty state if all loading methods fail
+      setLevels([]);
+      setLevelsWithProgress([]);
     }
   };
 
@@ -40,6 +71,12 @@ export default function HomeScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
+
+    // If online, try to refresh offline data first
+    if (isOnline) {
+      await refreshOfflineData();
+    }
+
     await loadLevelsWithProgress();
     setRefreshing(false);
   };
@@ -51,7 +88,8 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <TopAppBar title="BalangaAI Academy" />
-      
+      <OfflineIndicator />
+
       <ScrollView
         style={styles.content}
         refreshControl={

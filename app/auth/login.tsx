@@ -1,19 +1,19 @@
-import React, { useState } from 'react';
+import { borderRadius, colors, spacing, typography } from '@/src/config/theme';
+import { useAuth } from '@/src/contexts/AuthContext';
+import { router } from 'expo-router';
+import { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
-import { useAuth } from '@/src/contexts/AuthContext';
-import { colors, typography, spacing, borderRadius } from '@/src/config/theme';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -142,7 +142,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <View style={styles.signupContainer}>
-              <Text style={styles.signupText}>Don't have an account? </Text>
+              <Text style={styles.signupText}>Don&apos;t have an account? </Text>
               <TouchableOpacity onPress={navigateToSignup} disabled={isLoading}>
                 <Text style={styles.signupLink}>Sign Up</Text>
               </TouchableOpacity>
