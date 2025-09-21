@@ -1,55 +1,51 @@
 // Web-compatible database implementation using localStorage
-import { Platform } from 'react-native';
+// Note: We no longer seed mock data. On first run, we fetch from Bubble if local cache is empty.
+import { bubbleApi } from '../services/bubbleApi';
 
-// Mock data for web platform
-const mockData = {
-  levels: [
-    { id: 1, title: 'AI Fundamentals', description: 'Learn the basics of Artificial Intelligence and its applications', order_index: 1 },
-    { id: 2, title: 'AI Customer Service Specialist', description: 'Master AI tools for customer service excellence', order_index: 2 },
-    { id: 3, title: 'AI Operations Associate', description: 'Understand AI in business operations and workflow optimization', order_index: 3 },
-    { id: 4, title: 'AI Implementation Professional', description: 'Lead AI implementation projects and strategic planning', order_index: 4 }
-  ],
-  lessons: [
-    { id: 1, level_id: 1, title: 'Introduction to AI', description: 'Understanding what AI is and its impact on society', content: 'Artificial Intelligence (AI) represents one of the most transformative technologies of our time. From virtual assistants to autonomous vehicles, AI is reshaping how we live and work.', order_index: 1, estimated_duration: 30, is_downloaded: 0, local_file_path: null },
-    { id: 2, level_id: 1, title: 'Machine Learning Basics', description: 'Core concepts of machine learning and algorithms', content: 'Machine Learning is a subset of AI that enables computers to learn without being explicitly programmed. It uses algorithms to find patterns in data and make predictions.', order_index: 2, estimated_duration: 45, is_downloaded: 0, local_file_path: null },
-    { id: 3, level_id: 2, title: 'AI in Customer Support', description: 'How AI enhances customer service operations', content: 'Customer service has been revolutionized by AI technologies including chatbots, sentiment analysis, and automated ticket routing.', order_index: 1, estimated_duration: 35, is_downloaded: 0, local_file_path: null },
-    { id: 4, level_id: 2, title: 'Chatbot Implementation', description: 'Building and deploying AI-powered chatbots', content: 'Learn to design, build, and deploy intelligent chatbots that can handle customer inquiries with natural language processing.', order_index: 2, estimated_duration: 50, is_downloaded: 0, local_file_path: null },
-    { id: 5, level_id: 3, title: 'Process Automation', description: 'Using AI to automate business processes', content: 'Business process automation with AI can significantly improve efficiency and reduce costs through intelligent workflow management.', order_index: 1, estimated_duration: 40, is_downloaded: 0, local_file_path: null },
-    { id: 6, level_id: 3, title: 'Data Analysis with AI', description: 'Leveraging AI for business intelligence', content: 'AI-powered data analysis tools can uncover insights and patterns in business data to drive strategic decisions.', order_index: 2, estimated_duration: 55, is_downloaded: 0, local_file_path: null },
-    { id: 7, level_id: 4, title: 'AI Strategy Planning', description: 'Developing comprehensive AI implementation strategies', content: 'Creating successful AI strategies requires understanding business needs, technology capabilities, and organizational readiness.', order_index: 1, estimated_duration: 60, is_downloaded: 0, local_file_path: null },
-    { id: 8, level_id: 4, title: 'Leading AI Projects', description: 'Managing and leading AI transformation initiatives', content: 'Learn to lead AI projects from conception to deployment, managing teams and stakeholders throughout the transformation.', order_index: 2, estimated_duration: 65, is_downloaded: 0, local_file_path: null }
-  ],
-  progress: [],
-  jobs: [
-    { id: 1, title: 'AI Assistant Trainee', company: 'TechStart Inc', description: 'Entry-level position for AI enthusiasts', requirements: 'Completed AI Fundamentals course', salary_range: '$35,000 - $45,000', location: 'Remote', required_level: 1, is_active: true },
-    { id: 2, title: 'Customer Service AI Specialist', company: 'ServicePro Corp', description: 'Implement AI solutions in customer service', requirements: 'AI Customer Service Specialist certification', salary_range: '$50,000 - $65,000', location: 'Manila, Philippines', required_level: 2, is_active: true },
-    { id: 3, title: 'AI Operations Analyst', company: 'DataFlow Solutions', description: 'Optimize business operations using AI', requirements: 'AI Operations Associate certification', salary_range: '$60,000 - $80,000', location: 'Makati, Philippines', required_level: 3, is_active: true },
-    { id: 4, title: 'AI Implementation Manager', company: 'Innovation Labs', description: 'Lead AI transformation projects', requirements: 'AI Implementation Professional certification', salary_range: '$85,000 - $120,000', location: 'BGC, Taguig', required_level: 4, is_active: true }
-  ]
-};
+// Minimal state shape stored under a single key for compatibility
+const STORAGE_KEY = 'balangaai_data';
+const emptyState = { levels: [], lessons: [], progress: [], jobs: [], quizzes: [] };
 
 // Initialize web storage
 const initWebStorage = () => {
   if (typeof window !== 'undefined' && window.localStorage) {
-    const stored = localStorage.getItem('balangaai_data');
+    const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) {
-      localStorage.setItem('balangaai_data', JSON.stringify(mockData));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(emptyState));
     }
   }
 };
 
 const getWebData = () => {
   if (typeof window !== 'undefined' && window.localStorage) {
-    const stored = localStorage.getItem('balangaai_data');
-    return stored ? JSON.parse(stored) : mockData;
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : { ...emptyState };
   }
-  return mockData;
+  return { ...emptyState };
 };
 
 const setWebData = (data) => {
   if (typeof window !== 'undefined' && window.localStorage) {
-    localStorage.setItem('balangaai_data', JSON.stringify(data));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   }
+};
+
+// Helper: fetch from Bubble when local cache is empty
+const fetchIfEmpty = async (key, fetcher) => {
+  const data = getWebData();
+  const items = Array.isArray(data[key]) ? data[key] : [];
+  if (items.length > 0) return items;
+  try {
+    const remote = await fetcher();
+    if (Array.isArray(remote) && remote.length > 0) {
+      const updated = { ...data, [key]: remote };
+      setWebData(updated);
+      return remote;
+    }
+  } catch (err) {
+    console.warn(`webDb: failed to fetch ${key} from Bubble`, err);
+  }
+  return items; // still empty
 };
 
 export const initDB = async () => {
@@ -62,43 +58,68 @@ export const initWebDB = initDB;
 
 export const getLevelById = async (levelId) => {
   const data = getWebData();
-  return data.levels.find(level => level.id === levelId) || null;
+  let levels = data.levels;
+  if (!levels || levels.length === 0) {
+    levels = await fetchIfEmpty('levels', () => bubbleApi.listLevels());
+  }
+  return (levels || []).find(level => level.id === levelId) || null;
 };
 
 export const getLessonsByLevel = async (levelId) => {
   const data = getWebData();
-  return data.lessons.filter(lesson => lesson.level_id === levelId)
-    .sort((a, b) => a.order_index - b.order_index);
+  let lessons = data.lessons;
+  if (!lessons || lessons.length === 0) {
+    lessons = await fetchIfEmpty('lessons', () => bubbleApi.listLessons());
+  }
+  return (lessons || [])
+    .filter(lesson => lesson.level_id === levelId)
+    .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
 };
 
 export const getLessonById = async (lessonId) => {
   const data = getWebData();
-  return data.lessons.find(lesson => lesson.id === lessonId) || null;
+  let lessons = data.lessons;
+  if (!lessons || lessons.length === 0) {
+    lessons = await fetchIfEmpty('lessons', () => bubbleApi.listLessons());
+  }
+  return (lessons || []).find(lesson => lesson.id === lessonId) || null;
 };
 
 export const getQuizByLessonId = async (lessonId) => {
+  // Try to source a real quiz from Bubble if available, cached under quizzes
+  const data = getWebData();
+  let quizzes = data.quizzes;
+  if (!Array.isArray(quizzes) || quizzes.length === 0) {
+    quizzes = await fetchIfEmpty('quizzes', () => bubbleApi.listQuizzes?.());
+  }
+  const match = Array.isArray(quizzes)
+    ? quizzes.find(q => q.lesson_id === lessonId || q.id === lessonId)
+    : null;
+  if (match) return match;
+
+  // Fallback: lightweight generated quiz to avoid breaking the UI
   return {
     id: lessonId,
     lesson_id: lessonId,
     title: `Quiz for Lesson ${lessonId}`,
     questions: JSON.stringify([
       {
-        question: "What is the main benefit of AI in this context?",
-        options: ["Cost reduction", "Automation", "Better insights", "All of the above"],
-        correct: 3
+        question: 'What is the main benefit of AI in this context?',
+        options: ['Cost reduction', 'Automation', 'Better insights', 'All of the above'],
+        correct: 3,
       },
       {
-        question: "Which technology is most relevant here?",
-        options: ["Machine Learning", "Natural Language Processing", "Computer Vision", "Depends on use case"],
-        correct: 3
-      }
-    ])
+        question: 'Which technology is most relevant here?',
+        options: ['Machine Learning', 'Natural Language Processing', 'Computer Vision', 'Depends on use case'],
+        correct: 3,
+      },
+    ]),
   };
 };
 
 export const getAllLevels = async () => {
-  const data = getWebData();
-  return data.levels.sort((a, b) => a.order_index - b.order_index);
+  let levels = await fetchIfEmpty('levels', () => bubbleApi.listLevels());
+  return (levels || []).sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
 };
 
 export const getProgress = async (lessonId = null, quizId = null) => {
@@ -150,9 +171,10 @@ export const updateLessonDownloadStatus = async (lessonId, localFilePath, isDown
 };
 
 export const getJobsByLevel = async (minLevel = 1) => {
-  const data = getWebData();
-  return data.jobs.filter(job => job.required_level <= minLevel && job.is_active)
-    .sort((a, b) => a.required_level - b.required_level);
+  let jobs = await fetchIfEmpty('jobs', () => bubbleApi.syncJobs?.() ?? []);
+  return (jobs || [])
+    .filter(job => job.required_level <= minLevel && job.is_active)
+    .sort((a, b) => (a.required_level ?? 0) - (b.required_level ?? 0));
 };
 
 export const getCompletedLessonsCount = async () => {
