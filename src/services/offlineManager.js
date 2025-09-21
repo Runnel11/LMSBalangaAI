@@ -1,13 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+    getAllLevels, getCurrentUserId, getLessonsByLevel,
+    getProgress,
+    saveProgress
+} from '../db/index';
+import { bubbleApi } from './bubbleApi';
 import { networkService } from './networkService';
 import { syncService } from './syncService';
-import {
-  getAllLevels,
-  getLessonsByLevel,
-  getProgress,
-  saveProgress,
-  updateLessonDownloadStatus
-} from '../db/index';
 
 const OFFLINE_DATA_KEY = '@offline_data';
 const PENDING_SYNC_KEY = '@pending_sync';
@@ -236,12 +235,24 @@ export class OfflineManager {
       await saveProgress(lessonId, quizId, score, isCompleted);
 
       if (networkService.isOnline) {
-        // Try to sync immediately if online
+        // Try to sync immediately if online (write-through)
         try {
-          // Additional online sync logic can go here
-          console.log('Progress saved and synced online');
+          const userId = getCurrentUserId?.() || null;
+          if (userId) {
+            await bubbleApi.upsertProgress({
+              user_id: userId,
+              lesson_id: lessonId,
+              quiz_id: quizId,
+              is_completed: isCompleted ? 1 : 0,
+              score,
+            });
+          } else {
+            // If no user scope, fall back to periodic sync
+            await this.queueForSync('syncUserProgress', { userId });
+          }
+          console.log('Progress saved locally and synced to Bubble');
         } catch (syncError) {
-          console.log('Online sync failed, will retry later');
+          console.log('Online write-through failed, queued for retry');
           await this.queueForSync('saveProgress', {
             lessonId,
             quizId,

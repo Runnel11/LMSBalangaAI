@@ -28,6 +28,135 @@ export class BubbleApiService {
     };
   }
 
+  // Build URL with optional query params
+  buildUrl(path, query = {}) {
+    const url = new URL(`${this.baseUrl}${path}`);
+    Object.entries(query).forEach(([k, v]) => {
+      if (v === undefined || v === null) return;
+      url.searchParams.set(k, typeof v === 'string' ? v : JSON.stringify(v));
+    });
+    return url.toString();
+  }
+
+  // Internal: perform fetch with current headers
+  async request(path, options = {}) {
+    const headers = { ...this.headers, ...(options.headers || {}) };
+    const res = await fetch(`${this.baseUrl}${path}`, { ...options, headers });
+    return res;
+  }
+
+  // ========== Data API helpers (Bubble /obj endpoints) ==========
+  // Generic list with pagination and optional modified date filter
+  async listObjects(dataType, { since, limit = 100, cursor = 0, extraConstraints = [] } = {}) {
+    try {
+      const constraints = [...extraConstraints];
+      if (since) {
+        // Bubble expects key name as "modified date" in constraints
+        constraints.push({ key: 'modified date', constraint_type: 'greater than', value: since });
+      }
+      const url = this.buildUrl(`/obj/${dataType}`, {
+        constraints: constraints.length ? constraints : undefined,
+        limit,
+        cursor,
+      });
+      const res = await fetch(url, { headers: this.headers });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Data API list ${dataType} failed: HTTP ${res.status} ${text}`);
+      }
+      const data = await res.json();
+      return {
+        results: data.response?.results || [],
+        remaining: data.response?.remaining || 0,
+        count: data.response?.count || (data.response?.results?.length ?? 0),
+      };
+    } catch (err) {
+      console.error('Bubble Data API list error:', dataType, err.message);
+      throw err;
+    }
+  }
+
+  async listAllObjects(dataType, { since, pageSize = 100, extraConstraints = [] } = {}) {
+    let cursor = 0;
+    const all = [];
+    while (true) {
+      const { results, remaining } = await this.listObjects(dataType, { since, limit: pageSize, cursor, extraConstraints });
+      all.push(...results);
+      if (!remaining || remaining <= 0 || results.length === 0) break;
+      cursor += 1;
+    }
+    return all;
+  }
+
+  async listLevels(since) {
+    // Prefer Data API; fallback to workflow if it fails
+    try {
+      return await this.listAllObjects('level', { since });
+    } catch (_) {
+      return await this.syncLevels();
+    }
+  }
+
+  async listLessons(since) {
+    try {
+      return await this.listAllObjects('lesson', { since });
+    } catch (_) {
+      return await this.syncLessons();
+    }
+  }
+
+  async listQuizzes(since) {
+    try {
+      return await this.listAllObjects('quiz', { since });
+    } catch (_) {
+      return await this.syncQuizzes?.() || [];
+    }
+  }
+
+  // Upsert progress using Data API with idempotency by composite key
+  async upsertProgress(progress) {
+    const { user_id, lesson_id = null, quiz_id = null } = progress;
+    try {
+      // 1) Try find existing progress for user/lesson/quiz
+      const existing = await this.listAllObjects('user_progress', {
+        extraConstraints: [
+          { key: 'user_id', constraint_type: 'equals', value: user_id },
+          ...(lesson_id ? [{ key: 'lesson_id', constraint_type: 'equals', value: lesson_id }] : [{ key: 'lesson_id', constraint_type: 'is empty' }]),
+          ...(quiz_id ? [{ key: 'quiz_id', constraint_type: 'equals', value: quiz_id }] : [{ key: 'quiz_id', constraint_type: 'is empty' }]),
+        ],
+      });
+
+      if (existing && existing.length > 0) {
+        const id = existing[0]._id || existing[0].id;
+        const res = await fetch(`${this.baseUrl}/obj/user_progress/${id}`, {
+          method: 'PATCH',
+          headers: this.headers,
+          body: JSON.stringify(progress),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`PATCH user_progress failed: HTTP ${res.status} ${text}`);
+        }
+        return await res.json();
+      }
+
+      // 2) Create new
+      const res = await fetch(`${this.baseUrl}/obj/user_progress`, {
+        method: 'POST',
+        headers: this.headers,
+        body: JSON.stringify(progress),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`POST user_progress failed: HTTP ${res.status} ${text}`);
+      }
+      return await res.json();
+    } catch (err) {
+      console.error('Bubble Data API upsertProgress error:', err.message);
+      throw err;
+    }
+  }
+
   // Authentication methods
   async authenticateUser(email, password) {
     console.log('🔐 Attempting login with:', { email, baseUrl: this.baseUrl });

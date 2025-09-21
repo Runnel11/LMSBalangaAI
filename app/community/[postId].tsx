@@ -1,11 +1,11 @@
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, type TextStyle, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { TopAppBar } from '@/src/components/ui/TopAppBar';
 import { Button } from '@/src/components/ui/Button';
-import { colors, typography, spacing, borderRadius, shadows } from '@/src/config/theme';
+import { TopAppBar } from '@/src/components/ui/TopAppBar';
+import { borderRadius, colors, spacing, typography } from '@/src/config/theme';
 
 interface Comment {
   id: number;
@@ -118,10 +118,10 @@ export default function CommunityPostDetailScreen() {
               ? {
                   ...reply,
                   likes: reply.isLiked ? reply.likes - 1 : reply.likes + 1,
-                  isLiked: !reply.isLiked
+                  isLiked: !reply.isLiked,
                 }
               : reply
-          )
+          ),
         };
       }
 
@@ -243,11 +243,14 @@ export default function CommunityPostDetailScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+      <SafeAreaView style={styles.container} edges={['bottom']}>
       <TopAppBar
         title="Post Details"
-        showBack
+        showBackButton
         onBackPress={() => router.back()}
+        backgroundColor={colors.surface}
       />
 
       <ScrollView style={styles.content}>
@@ -308,11 +311,46 @@ export default function CommunityPostDetailScreen() {
           </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </>
   );
 }
 
-const styles = StyleSheet.create({
+type Styles = {
+  container: ViewStyle;
+  content: ViewStyle;
+  postContainer: ViewStyle;
+  postHeader: ViewStyle;
+  postAuthor: TextStyle;
+  postTimestamp: TextStyle;
+  postTitle: TextStyle;
+  postContent: TextStyle;
+  postMeta: ViewStyle;
+  categoryTag: ViewStyle;
+  categoryText: TextStyle;
+  postActions: ViewStyle;
+  actionButton: ViewStyle;
+  actionText: TextStyle;
+  likedText: TextStyle;
+  commentsSection: ViewStyle;
+  sectionTitle: TextStyle;
+  addCommentContainer: ViewStyle;
+  textInput: TextStyle;
+  commentButton: ViewStyle;
+  commentsContainer: ViewStyle;
+  commentCard: ViewStyle;
+  replyCard: ViewStyle;
+  commentHeader: ViewStyle;
+  commentAuthor: TextStyle;
+  commentTimestamp: TextStyle;
+  commentContent: TextStyle;
+  commentActions: ViewStyle;
+  replyInput: ViewStyle;
+  replyInputActions: ViewStyle;
+  repliesContainer: ViewStyle;
+};
+
+const styles = StyleSheet.create<Styles>({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -334,22 +372,22 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   postAuthor: {
-    ...typography.body2,
+    ...(typography.body2 as TextStyle),
     color: colors.primary,
     fontWeight: '600',
   },
   postTimestamp: {
-    ...typography.caption,
+    ...(typography.caption as TextStyle),
     color: colors.textSecondary,
   },
   postTitle: {
-    ...typography.h3,
+    ...(typography.h3 as TextStyle),
     color: colors.textPrimary,
     fontWeight: '600',
     marginBottom: spacing.md,
   },
   postContent: {
-    ...typography.body1,
+    ...(typography.body1 as TextStyle),
     color: colors.textPrimary,
     lineHeight: 24,
     marginBottom: spacing.lg,
@@ -366,7 +404,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm,
   },
   categoryText: {
-    ...typography.caption,
+    ...(typography.caption as TextStyle),
     color: colors.textSecondary,
     fontWeight: '500',
   },
@@ -379,7 +417,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   actionText: {
-    ...typography.caption,
+    ...(typography.caption as TextStyle),
     color: colors.textSecondary,
   },
   likedText: {
@@ -390,7 +428,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   sectionTitle: {
-    ...typography.h4,
+    ...(typography.h3 as TextStyle),
     color: colors.textPrimary,
     marginBottom: spacing.lg,
   },
@@ -401,7 +439,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     padding: spacing.md,
-    ...typography.body2,
+    ...(typography.body2 as TextStyle),
     color: colors.textPrimary,
     borderWidth: 1,
     borderColor: colors.border,
@@ -433,16 +471,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   commentAuthor: {
-    ...typography.body2,
+    ...(typography.body2 as TextStyle),
     color: colors.primary,
     fontWeight: '600',
   },
   commentTimestamp: {
-    ...typography.caption,
+    ...(typography.caption as TextStyle),
     color: colors.textSecondary,
   },
   commentContent: {
-    ...typography.body2,
+    ...(typography.body2 as TextStyle),
     color: colors.textPrimary,
     lineHeight: 20,
     marginBottom: spacing.sm,

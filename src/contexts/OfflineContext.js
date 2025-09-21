@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { offlineManager } from '../services/offlineManager';
 import { networkService } from '../services/networkService';
+import { offlineManager } from '../services/offlineManager';
 
 const OfflineContext = createContext();
 
@@ -128,7 +128,7 @@ export const OfflineProvider = ({ children }) => {
       return `Online (${connectionType})`;
     } else {
       if (offlineData) {
-        return 'Offline mode - Using cached data';
+        return 'Offline mode';
       }
       return 'Offline - Limited functionality';
     }

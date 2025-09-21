@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
     getAllLevels,
     getLessonsByLevel,
@@ -14,6 +15,25 @@ export class SyncService {
   constructor() {
     this.isOnline = true;
     this.syncInProgress = false;
+    this.lastSyncAt = null; // ISO string
+  }
+
+  async loadLastSyncAt() {
+    try {
+      const ts = await AsyncStorage.getItem('@last_sync_at');
+      this.lastSyncAt = ts || null;
+    } catch (e) {
+      this.lastSyncAt = null;
+    }
+  }
+
+  async saveLastSyncAt(ts) {
+    try {
+      await AsyncStorage.setItem('@last_sync_at', ts);
+      this.lastSyncAt = ts;
+    } catch (e) {
+      // ignore
+    }
   }
 
   // Check network connectivity using the enhanced network service
@@ -47,13 +67,18 @@ export class SyncService {
       return;
     }
 
-    this.syncInProgress = true;
+  this.syncInProgress = true;
+  // Load stored last sync timestamp
+  await this.loadLastSyncAt();
     console.log('Starting sync from Bubble...');
 
     try {
+      // Incremental sync using modified date when possible
       await this.syncLevelsFromBubble();
       await this.syncLessonsFromBubble();
+      await this.syncQuizzesFromBubble?.();
       console.log('Sync from Bubble completed successfully');
+      await this.saveLastSyncAt(new Date().toISOString());
     } catch (error) {
       console.error('Sync from Bubble failed:', error);
     } finally {
@@ -97,12 +122,13 @@ export class SyncService {
       }
 
       console.log('Loading initial content from Bubble...');
+      await this.loadLastSyncAt();
 
       // Load all content types in parallel
       const [levels, lessons, quizzes, jobs] = await Promise.all([
-        bubbleApi.syncLevels(),
-        bubbleApi.syncLessons(),
-        bubbleApi.syncQuizzes ? bubbleApi.syncQuizzes() : [],
+        bubbleApi.listLevels?.() || bubbleApi.syncLevels(),
+        bubbleApi.listLessons?.() || bubbleApi.syncLessons(),
+        bubbleApi.listQuizzes?.() || bubbleApi.syncQuizzes?.() || [],
         bubbleApi.syncJobs ? bubbleApi.syncJobs() : []
       ]);
 
@@ -127,7 +153,8 @@ export class SyncService {
       }
 
       console.log(`Initial content loaded: ${levels.length} levels, ${lessons.length} lessons, ${quizzes.length} quizzes, ${jobs.length} jobs`);
-      return true;
+  await this.saveLastSyncAt(new Date().toISOString());
+  return true;
 
     } catch (error) {
       console.error('Error loading initial content from Bubble:', error);
@@ -138,7 +165,7 @@ export class SyncService {
   // Sync levels from Bubble to local database
   async syncLevelsFromBubble() {
     try {
-      const bubbleLevels = await bubbleApi.syncLevels();
+      const bubbleLevels = await (bubbleApi.listLevels?.(this.lastSyncAt) || bubbleApi.syncLevels());
       const localLevels = await getAllLevels();
 
       // Compare and update levels if needed
@@ -158,7 +185,7 @@ export class SyncService {
   // Sync lessons from Bubble to local database
   async syncLessonsFromBubble() {
     try {
-      const bubbleLessons = await bubbleApi.syncLessons();
+      const bubbleLessons = await (bubbleApi.listLessons?.(this.lastSyncAt) || bubbleApi.syncLessons());
 
       // Group lessons by level and sync
       for (const bubbleLesson of bubbleLessons) {
@@ -173,6 +200,21 @@ export class SyncService {
       }
     } catch (error) {
       console.error('Error syncing lessons from Bubble:', error);
+    }
+  }
+
+  // Sync quizzes from Bubble to local database
+  async syncQuizzesFromBubble() {
+    try {
+      const bubbleQuizzes = await (bubbleApi.listQuizzes?.(this.lastSyncAt) || bubbleApi.syncQuizzes?.() || []);
+      for (const bubbleQuiz of bubbleQuizzes) {
+        const levelId = bubbleQuiz.lesson_id?._id || bubbleQuiz.lesson_id;
+        if (!levelId) continue;
+        await insertQuizFromBubble(bubbleQuiz);
+        console.log(`Quiz "${bubbleQuiz.title}" synced from Bubble`);
+      }
+    } catch (error) {
+      console.error('Error syncing quizzes from Bubble:', error);
     }
   }
 

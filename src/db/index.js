@@ -8,6 +8,9 @@ export const setCurrentUserId = (userId) => {
   currentUserId = userId ?? null;
 };
 
+// Getter to retrieve the current scoped userId for DB operations
+export const getCurrentUserId = () => currentUserId;
+
 const initializeDBModule = async () => {
   if (dbModule) return dbModule;
   
