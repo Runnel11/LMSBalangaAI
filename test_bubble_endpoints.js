@@ -1,18 +1,25 @@
 // Test script to verify Bubble.io endpoints
 const API_KEY = process.env.EXPO_PUBLIC_BUBBLE_API_KEY || '2bcbbf27c42d9a0e78596d63b03fd1e2';
-const BASE_URL = process.env.EXPO_PUBLIC_BUBBLE_BASE_URL || 'https://balangaai.bubbleapps.io/version-02pdq/api/1.1';
+const BASE_URL = process.env.EXPO_PUBLIC_BUBBLE_BASE_URL || 'https://balangaai.bubbleapps.io/version-test/api/1.1';
 
 const headers = {
   'Authorization': `Bearer ${API_KEY}`,
   'Content-Type': 'application/json'
 };
 
+function buildUrl(path) {
+  const base = (BASE_URL || '').replace(/\/$/, '');
+  const p = `/${(path || '').replace(/^\//, '')}`;
+  return `${base}${p}`;
+}
+
 async function testEndpoint(endpoint, name) {
   console.log(`\n🔍 Testing ${name}...`);
-  console.log(`URL: ${BASE_URL}${endpoint}`);
+  const url = buildUrl(endpoint);
+  console.log(`URL: ${url}`);
 
   try {
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
+    const response = await fetch(url, {
       method: 'GET',
       headers: headers
     });
@@ -45,9 +52,15 @@ async function testAllEndpoints() {
   console.log('=====================================');
 
   const tests = [
-    ['wf/lesson', 'Lessons'],
-    ['wf/quiz', 'Quizzes'],
-    ['/wf/level', 'Levels (Workflow)']
+    // Workflow API endpoints
+    ['/wf/lesson', 'Lessons (WF)'],
+    ['/wf/quiz', 'Quizzes (WF)'],
+    ['/wf/level', 'Levels (WF)'],
+    // Data API endpoints
+    ['/obj/lesson', 'Lessons (OBJ)'],
+    ['/obj/quiz', 'Quizzes (OBJ)'],
+    ['/obj/level', 'Levels (OBJ)'],
+    ['/obj/job', 'Jobs (OBJ)']
   ];
 
   let passedTests = 0;

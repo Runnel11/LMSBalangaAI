@@ -12,31 +12,48 @@ import { useOffline } from '@/src/contexts/OfflineContext';
 import { getAllLevels, getLevelProgress } from '@/src/db/index';
 
 export default function HomeScreen() {
-  const [levels, setLevels] = useState([]);
-  const [levelsWithProgress, setLevelsWithProgress] = useState([]);
+  type LevelItem = {
+    id: string | number;
+    _id?: string;
+    title: string;
+    description?: string;
+    order_index?: number;
+    progress?: number;
+    totalLessons?: number;
+    completedLessons?: number;
+  };
+
+  const [levels, setLevels] = useState<LevelItem[]>([]);
+  const [levelsWithProgress, setLevelsWithProgress] = useState<LevelItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const { isOnline, offlineData, refreshOfflineData } = useOffline();
 
   const loadLevelsWithProgress = async () => {
     try {
-      let levelsData;
+  let levelsData: any[];
 
       // Try to load from local database first
       try {
-        levelsData = await getAllLevels();
+  levelsData = await getAllLevels();
       } catch (dbError) {
         console.warn('Could not load from local database, trying offline cache:', dbError);
 
         // Fallback to offline cached data
         if (offlineData?.levels) {
-          levelsData = offlineData.levels;
+          levelsData = offlineData.levels as any[];
         } else {
           throw new Error('No data available offline');
         }
       }
 
-      const levelsWithProgressData = await Promise.all(
-        levelsData.map(async (level) => {
+      // Normalize IDs from Bubble (_id) -> id if necessary
+      const normalizedLevels: LevelItem[] = (levelsData || []).map((level: any) => ({
+        ...level,
+        id: level?.id ?? level?._id,
+      }));
+
+      const levelsWithProgressData: LevelItem[] = await Promise.all(
+        normalizedLevels.map(async (level: LevelItem) => {
           try {
             const progress = await getLevelProgress(level.id);
             return {
@@ -56,7 +73,7 @@ export default function HomeScreen() {
           }
         })
       );
-      setLevels(levelsData);
+      setLevels(normalizedLevels);
       setLevelsWithProgress(levelsWithProgressData);
     } catch (error) {
       console.error('Error loading levels:', error);
@@ -90,7 +107,7 @@ export default function HomeScreen() {
   };
 
   const navigateToCourse = (levelId) => {
-    router.push(`/course/${levelId}`);
+    router.push(`/course/${String(levelId)}`);
   };
 
   return (
@@ -116,14 +133,14 @@ export default function HomeScreen() {
           
           {levelsWithProgress.map((level) => (
             <CourseCard
-              key={level.id}
+              key={String(level.id ?? level._id)}
               title={level.title}
               description={level.description}
               progress={level.progress}
               totalLessons={level.totalLessons}
               completedLessons={level.completedLessons}
               level={level.order_index}
-              onPress={() => navigateToCourse(level.id)}
+              onPress={() => navigateToCourse(level.id ?? level._id)}
               accessibilityLabel={`${level.title} course, level ${level.order_index}, ${level.progress}% complete`}
             />
           ))}

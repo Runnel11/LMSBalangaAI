@@ -1,0 +1,16 @@
+title,author,category,content,posted_at,likes,replies,is_pinned,is_active
+"Tips for Implementing AI Chatbots","Maria Santos","Customer Service","I completed the AI Customer Service Specialist course and wanted to share practical tips for planning flows, escalation paths, and continuous improvement.",2024-03-01T10:15:00Z,15,8,FALSE,TRUE
+"Study Group for AI Fundamentals","John Dela Cruz","Study Groups","Looking to form a study group for AI Fundamentals certification. We can meet twice a week and share resources.",2024-03-02T08:30:00Z,23,12,FALSE,TRUE
+"Landed AI Operations Analyst Role","Anna Reyes","Success Stories","Thanks to BalangaAI Academy! I followed the Level 3 track, built a portfolio project, and nailed the interview.",2024-03-02T14:45:00Z,89,25,TRUE,TRUE
+"Where to Find Practice Quizzes?","Carlos Mendoza","Help & Support","Does anyone have extra practice quizzes for Level 2? I want to prepare for the assessment.",2024-03-03T09:10:00Z,7,5,FALSE,TRUE
+"Resource: AI Ethics Guideline PDF","Lea Cruz","Resources","Sharing a concise AI ethics guideline we used internally—covers bias, transparency, and human oversight.",2024-03-03T12:05:00Z,34,9,FALSE,TRUE
+"Networking Event: AI Careers Night","BalangaAI Team","Events","Join our virtual networking event next week. Meet mentors and hiring partners.",2024-03-04T16:00:00Z,56,18,TRUE,TRUE
+"Help: Confused About Model Evaluation","Paolo Garcia","General","Can someone explain precision vs recall with simple examples? I keep mixing them up.",2024-03-05T07:20:00Z,12,6,FALSE,TRUE
+"Share Your Favorite Learning Channels","Rica Santos","General","What YouTube channels or courses helped you most when starting with AI and Python?",2024-03-05T15:25:00Z,28,14,FALSE,TRUE
+"Looking for Internship Opportunities","Miguel Tan","Jobs & Careers","Second-year CS student here. Any companies open to AI-related internships (remote OK)?",2024-03-06T10:00:00Z,19,11,FALSE,TRUE
+"Best Tools for Data Labeling","Jasmine Lee","Resources","What tools are you using for data labeling? Considering Label Studio vs custom scripts.",2024-03-06T19:40:00Z,22,7,FALSE,TRUE
+"How I Built a Simple Chatbot","Alex Kim","Success Stories","I built a rules+LLM hybrid chatbot for a school project. Sharing a step-by-step outline and pitfalls.",2024-03-07T09:55:00Z,41,16,FALSE,TRUE
+"Accountability Thread: Daily Practice","Nina Flores","Study Groups","Posting daily practice goals here. Join and share your progress for the next 30 days!",2024-03-07T20:10:00Z,33,20,FALSE,TRUE
+"Is Python Enough for Level 2?","Ramon Diaz","Help & Support","Do we need NumPy/Pandas mastery for Level 2, or will basic Python suffice?",2024-03-08T11:35:00Z,14,8,FALSE,TRUE
+"Hiring: Junior AI Researcher","Innovation Labs","Jobs & Careers","We are hiring a Junior AI Researcher (Level 1–2). DM for details or check the Jobs tab.",2024-03-08T15:00:00Z,50,22,TRUE,TRUE
+"Share: Prompt Engineering Tips","Grace Uy","General","Sharing prompt patterns that improved our support chatbot accuracy by 15%.",2024-03-09T09:05:00Z,27,10,FALSE,TRUE

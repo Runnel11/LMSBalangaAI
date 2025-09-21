@@ -13,10 +13,7 @@ export class BubbleApiService {
   // Set user authentication token
   setAuthToken(token) {
     this.userToken = token;
-    this.headers = {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
+    // Keep default headers as API key; we'll choose token vs apiKey per request type
   }
 
   // Clear authentication token
@@ -38,9 +35,12 @@ export class BubbleApiService {
     return url.toString();
   }
 
-  // Internal: perform fetch with current headers
-  async request(path, options = {}) {
-    const headers = { ...this.headers, ...(options.headers || {}) };
+  // Internal: perform fetch with appropriate headers
+  async request(path, options = {}, { useUserToken = false } = {}) {
+    const authHeader = useUserToken && this.userToken
+      ? { 'Authorization': `Bearer ${this.userToken}` }
+      : { 'Authorization': `Bearer ${this.apiKey}` };
+    const headers = { 'Content-Type': 'application/json', ...authHeader, ...(options.headers || {}) };
     const res = await fetch(`${this.baseUrl}${path}`, { ...options, headers });
     return res;
   }
@@ -59,7 +59,8 @@ export class BubbleApiService {
         limit,
         cursor,
       });
-      const res = await fetch(url, { headers: this.headers });
+      // Data API should always use API key; do not send user token here
+      const res = await this.request(`/obj/${dataType}?${url.split('?')[1] || ''}`, { method: 'GET' }, { useUserToken: false });
       if (!res.ok) {
         const text = await res.text();
         throw new Error(`Data API list ${dataType} failed: HTTP ${res.status} ${text}`);
@@ -89,28 +90,20 @@ export class BubbleApiService {
   }
 
   async listLevels(since) {
-    // Prefer Data API; fallback to workflow if it fails
-    try {
-      return await this.listAllObjects('level', { since });
-    } catch (_) {
-      return await this.syncLevels();
-    }
+    // Use Data API exclusively for formal content fetching
+    return await this.listAllObjects('level', { since });
   }
 
   async listLessons(since) {
-    try {
-      return await this.listAllObjects('lesson', { since });
-    } catch (_) {
-      return await this.syncLessons();
-    }
+    return await this.listAllObjects('lesson', { since });
   }
 
   async listQuizzes(since) {
-    try {
-      return await this.listAllObjects('quiz', { since });
-    } catch (_) {
-      return await this.syncQuizzes?.() || [];
-    }
+    return await this.listAllObjects('quiz', { since });
+  }
+
+  async listJobs(since) {
+    return await this.listAllObjects('job', { since });
   }
 
   // Upsert progress using Data API with idempotency by composite key
@@ -356,17 +349,15 @@ export class BubbleApiService {
   // Data synchronization methods
   async syncLevels() {
     try {
-      const response = await fetch(`${this.baseUrl}/wf/level`, {
-        method: 'GET',
-        headers: this.headers
-      });
+      // Formalize sync via Data API as well
+      const response = await this.request('/obj/level', { method: 'GET' }, { useUserToken: false });
 
       if (!response.ok) {
         throw new Error('Failed to fetch levels');
       }
 
       const data = await response.json();
-      return data.response.results;
+      return data.response?.results || [];
     } catch (error) {
       console.error('Error syncing levels:', error);
       return [];
@@ -375,17 +366,14 @@ export class BubbleApiService {
 
   async syncLessons() {
     try {
-      const response = await fetch(`${this.baseUrl}/wf/lesson`, {
-        method: 'GET',
-        headers: this.headers
-      });
+      const response = await this.request('/obj/lesson', { method: 'GET' }, { useUserToken: false });
 
       if (!response.ok) {
         throw new Error('Failed to fetch lessons');
       }
 
       const data = await response.json();
-      return data.response.results;
+      return data.response?.results || [];
     } catch (error) {
       console.error('Error syncing lessons:', error);
       return [];
@@ -394,17 +382,14 @@ export class BubbleApiService {
 
   async syncQuizzes() {
     try {
-      const response = await fetch(`${this.baseUrl}/wf/quiz`, {
-        method: 'GET',
-        headers: this.headers
-      });
+      const response = await this.request('/obj/quiz', { method: 'GET' }, { useUserToken: false });
 
       if (!response.ok) {
         throw new Error('Failed to fetch quizzes');
       }
 
       const data = await response.json();
-      return data.response.results;
+      return data.response?.results || [];
     } catch (error) {
       console.error('Error syncing quizzes:', error);
       return [];
@@ -413,17 +398,9 @@ export class BubbleApiService {
 
   async syncJobs() {
     try {
-      const response = await fetch(`${this.baseUrl}/job`, {
-        method: 'GET',
-        headers: this.headers
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch jobs');
-      }
-
-      const data = await response.json();
-      return data.response.results;
+      // Jobs via Data API; use API key
+      // Use the same list method for consistency/pagination
+      return await this.listAllObjects('job');
     } catch (error) {
       console.error('Error syncing jobs:', error);
       return [];
@@ -502,5 +479,5 @@ export class BubbleApiService {
 // Default instance - configure with your Bubble app details
 export const bubbleApi = new BubbleApiService(
   process.env.EXPO_PUBLIC_BUBBLE_API_KEY || '2bcbbf27c42d9a0e78596d63b03fd1e2',
-  process.env.EXPO_PUBLIC_BUBBLE_BASE_URL || 'https://balangaai.bubbleapps.io/version-02pdq/api/1.1'
+  process.env.EXPO_PUBLIC_BUBBLE_BASE_URL || 'https://balangaai.bubbleapps.io/version-test/api/1.1'
 );

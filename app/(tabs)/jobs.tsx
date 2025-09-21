@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, RefreshControl } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View, type TextStyle, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { TopAppBar } from '@/src/components/ui/TopAppBar';
 import { Button } from '@/src/components/ui/Button';
-import { getJobsByLevel, getCompletedLessonsCount, getAllLevels } from '@/src/db/index';
-import { colors, typography, spacing, borderRadius, shadows } from '@/src/config/theme';
+import { TopAppBar } from '@/src/components/ui/TopAppBar';
+import { borderRadius, colors, shadows, spacing, typography } from '@/src/config/theme';
+import { getAllLevels, getCompletedLessonsCount, getJobsByLevel } from '@/src/db/index';
 
 interface Job {
   id: number;
@@ -23,23 +23,25 @@ export default function JobsScreen() {
   const [completedLessonsCount, setCompletedLessonsCount] = useState(0);
   const [userLevel, setUserLevel] = useState(1);
   const [refreshing, setRefreshing] = useState(false);
+  const [levels, setLevels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadJobsData = async () => {
     try {
       const completedCount = await getCompletedLessonsCount();
-      const levels = await getAllLevels();
+  const lvls = await getAllLevels();
       
       // Determine user level based on completed lessons
       // Assuming 2 lessons per level for this example
       const lessonsPerLevel = 2;
-      const currentUserLevel = Math.min(Math.floor(completedCount / lessonsPerLevel) + 1, 4);
-      
-      const jobsData = await getJobsByLevel(currentUserLevel);
-      
+  const currentUserLevel = Math.max(1, Math.min(Math.floor(completedCount / lessonsPerLevel) + 1, Math.max(4, lvls?.length || 4)));
+
+  const jobsData = await getJobsByLevel(currentUserLevel);
+
       setCompletedLessonsCount(completedCount);
       setUserLevel(currentUserLevel);
       setJobs(jobsData);
+  setLevels(lvls || []);
     } catch (error) {
       console.error('Error loading jobs data:', error);
     } finally {
@@ -74,14 +76,18 @@ export default function JobsScreen() {
     );
   };
 
+  const levelNameMap = useMemo(() => {
+    const map = new Map<number, string>();
+    (levels || []).forEach((lvl, idx) => {
+      const order = Number(lvl.order_index) || (idx + 1);
+      const title = typeof lvl.title === 'string' ? lvl.title : `Level ${order}`;
+      map.set(order, title);
+    });
+    return map;
+  }, [levels]);
+
   const getLevelName = (level: number) => {
-    const levelNames = [
-      'AI Fundamentals',
-      'AI Customer Service Specialist',
-      'AI Operations Associate',
-      'AI Implementation Professional'
-    ];
-    return levelNames[level - 1] || 'Unknown Level';
+    return levelNameMap.get(Number(level)) || `Level ${level}`;
   };
 
   const canApplyForJob = (requiredLevel: number) => {
@@ -90,40 +96,40 @@ export default function JobsScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
+      <SafeAreaView style={styles.container as ViewStyle} edges={['bottom']}>
         <TopAppBar title="Job Board" />
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading jobs...</Text>
+        <View style={styles.loadingContainer as ViewStyle}>
+          <Text style={styles.loadingText as TextStyle}>Loading jobs...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container as ViewStyle} edges={['bottom']}>
       <TopAppBar title="Job Board" />
       
       <ScrollView
-        style={styles.content}
+        style={styles.content as ViewStyle}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Available Opportunities</Text>
-          <Text style={styles.headerSubtitle}>
+        <View style={styles.header as ViewStyle}>
+          <Text style={styles.headerTitle as TextStyle}>Available Opportunities</Text>
+          <Text style={styles.headerSubtitle as TextStyle}>
             Your current level: {getLevelName(userLevel)} (Level {userLevel})
           </Text>
-          <Text style={styles.progressText}>
+          <Text style={styles.progressText as TextStyle}>
             {completedLessonsCount} lessons completed
           </Text>
         </View>
 
-        <View style={styles.jobsSection}>
+        <View style={styles.jobsSection as ViewStyle}>
           {jobs.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No Jobs Available</Text>
-              <Text style={styles.emptyText}>
+            <View style={styles.emptyState as ViewStyle}>
+              <Text style={styles.emptyTitle as TextStyle}>No Jobs Available</Text>
+              <Text style={styles.emptyText as TextStyle}>
                 Complete more lessons to unlock job opportunities!
               </Text>
             </View>
@@ -153,47 +159,47 @@ interface JobCardProps {
 
 const JobCard: React.FC<JobCardProps> = ({ job, canApply, onApply, getLevelName }) => {
   return (
-    <View style={styles.jobCard}>
-      <View style={styles.jobHeader}>
-        <Text style={styles.jobTitle}>{job.title}</Text>
-        <Text style={styles.company}>{job.company}</Text>
+    <View style={styles.jobCard as ViewStyle}>
+      <View style={styles.jobHeader as ViewStyle}>
+        <Text style={styles.jobTitle as TextStyle}>{job.title}</Text>
+        <Text style={styles.company as TextStyle}>{job.company}</Text>
       </View>
 
-      <Text style={styles.jobDescription} numberOfLines={3}>
+      <Text style={styles.jobDescription as TextStyle} numberOfLines={3}>
         {job.description}
       </Text>
 
-      <View style={styles.jobDetails}>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Location:</Text>
-          <Text style={styles.detailValue}>{job.location}</Text>
+      <View style={styles.jobDetails as ViewStyle}>
+        <View style={styles.detailRow as ViewStyle}>
+          <Text style={styles.detailLabel as TextStyle}>Location:</Text>
+          <Text style={styles.detailValue as TextStyle}>{job.location}</Text>
         </View>
         
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Salary:</Text>
-          <Text style={styles.detailValue}>{job.salary_range}</Text>
+        <View style={styles.detailRow as ViewStyle}>
+          <Text style={styles.detailLabel as TextStyle}>Salary:</Text>
+          <Text style={styles.detailValue as TextStyle}>{job.salary_range}</Text>
         </View>
         
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Required Level:</Text>
-          <Text style={styles.detailValue}>
+        <View style={styles.detailRow as ViewStyle}>
+          <Text style={styles.detailLabel as TextStyle}>Required Level:</Text>
+          <Text style={styles.detailValue as TextStyle}>
             {getLevelName(job.required_level)} (Level {job.required_level})
           </Text>
         </View>
       </View>
 
-      <View style={styles.requirementsSection}>
-        <Text style={styles.requirementsTitle}>Requirements:</Text>
-        <Text style={styles.requirementsText}>{job.requirements}</Text>
+      <View style={styles.requirementsSection as ViewStyle}>
+        <Text style={styles.requirementsTitle as TextStyle}>Requirements:</Text>
+        <Text style={styles.requirementsText as TextStyle}>{job.requirements}</Text>
       </View>
 
-      <View style={styles.jobActions}>
+      <View style={styles.jobActions as ViewStyle}>
         <Button
           title={canApply ? 'Apply Now' : 'Level Required'}
           onPress={onApply}
           disabled={!canApply}
           variant={canApply ? 'primary' : 'tertiary'}
-          style={styles.applyButton}
+          style={styles.applyButton as ViewStyle}
           accessibilityLabel={canApply ? `Apply for ${job.title}` : `Level ${job.required_level} required to apply`}
         />
       </View>
@@ -201,7 +207,36 @@ const JobCard: React.FC<JobCardProps> = ({ job, canApply, onApply, getLevelName 
   );
 };
 
-const styles = StyleSheet.create({
+type Styles = {
+  container: ViewStyle;
+  content: ViewStyle;
+  loadingContainer: ViewStyle;
+  loadingText: TextStyle;
+  header: ViewStyle;
+  headerTitle: TextStyle;
+  headerSubtitle: TextStyle;
+  progressText: TextStyle;
+  jobsSection: ViewStyle;
+  emptyState: ViewStyle;
+  emptyTitle: TextStyle;
+  emptyText: TextStyle;
+  jobCard: ViewStyle;
+  jobHeader: ViewStyle;
+  jobTitle: TextStyle;
+  company: TextStyle;
+  jobDescription: TextStyle;
+  jobDetails: ViewStyle;
+  detailRow: ViewStyle;
+  detailLabel: TextStyle;
+  detailValue: TextStyle;
+  requirementsSection: ViewStyle;
+  requirementsTitle: TextStyle;
+  requirementsText: TextStyle;
+  jobActions: ViewStyle;
+  applyButton: ViewStyle;
+};
+
+const styles = StyleSheet.create<Styles>({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -215,7 +250,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    ...typography.body1,
+    ...(typography.body1 as TextStyle),
     color: colors.textSecondary,
   },
   header: {
@@ -224,18 +259,18 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   headerTitle: {
-    ...typography.h2,
+    ...(typography.h2 as TextStyle),
     color: colors.textPrimary,
     marginBottom: spacing.sm,
   },
   headerSubtitle: {
-    ...typography.body1,
+    ...(typography.body1 as TextStyle),
     color: colors.primary,
     fontWeight: '600',
     marginBottom: spacing.xs,
   },
   progressText: {
-    ...typography.body2,
+    ...(typography.body2 as TextStyle),
     color: colors.textSecondary,
   },
   jobsSection: {
@@ -247,13 +282,13 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   emptyTitle: {
-    ...typography.h3,
+    ...(typography.h3 as TextStyle),
     color: colors.textPrimary,
     marginBottom: spacing.md,
     textAlign: 'center',
   },
   emptyText: {
-    ...typography.body1,
+    ...(typography.body1 as TextStyle),
     color: colors.textSecondary,
     textAlign: 'center',
   },
@@ -269,17 +304,17 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   jobTitle: {
-    ...typography.h3,
+    ...(typography.h3 as TextStyle),
     color: colors.textPrimary,
     marginBottom: spacing.xs,
   },
   company: {
-    ...typography.body1,
+    ...(typography.body1 as TextStyle),
     color: colors.primary,
     fontWeight: '600',
   },
   jobDescription: {
-    ...typography.body1,
+    ...(typography.body1 as TextStyle),
     color: colors.textSecondary,
     lineHeight: 22,
     marginBottom: spacing.md,
@@ -293,13 +328,13 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   detailLabel: {
-    ...typography.body2,
+    ...(typography.body2 as TextStyle),
     color: colors.textSecondary,
     fontWeight: '600',
     minWidth: 80,
   },
   detailValue: {
-    ...typography.body2,
+    ...(typography.body2 as TextStyle),
     color: colors.textPrimary,
     flex: 1,
   },
@@ -307,13 +342,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   requirementsTitle: {
-    ...typography.body1,
+    ...(typography.body1 as TextStyle),
     color: colors.textPrimary,
     fontWeight: '600',
     marginBottom: spacing.sm,
   },
   requirementsText: {
-    ...typography.body2,
+    ...(typography.body2 as TextStyle),
     color: colors.textSecondary,
     lineHeight: 20,
   },

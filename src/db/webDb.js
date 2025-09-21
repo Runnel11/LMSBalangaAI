@@ -30,17 +30,108 @@ const setWebData = (data) => {
   }
 };
 
+// ---------- Normalizers: Convert Bubble shapes to app-consumed shapes ----------
+const normalizeLevels = (items = []) =>
+  (items || []).map((it) => ({
+    ...it,
+    id: it.id ?? it._id ?? it.Id ?? it.ID,
+    title: it.title ?? it.name ?? it.Title,
+    description: it.description ?? it.Description ?? '',
+    order_index: it.order_index ?? it.order ?? 0,
+  }));
+
+const normalizeLessons = (items = []) =>
+  (items || []).map((it) => ({
+    ...it,
+    id: it.id ?? it._id ?? it.Id ?? it.ID,
+    level_id: it.level_id ?? it.level ?? it.levelId ?? it.LevelId ?? null,
+    title: it.title ?? '',
+    description: it.description ?? '',
+    content: it.content ?? it.body ?? '',
+    order_index: it.order_index ?? it.order ?? 0,
+    estimated_duration: it.estimated_duration ?? it.duration ?? 0,
+    is_downloaded: it.is_downloaded ?? 0,
+    local_file_path: it.local_file_path ?? null,
+  }));
+
+const normalizeQuizzes = (items = []) =>
+  (items || []).map((it) => {
+    const id = it.id ?? it._id ?? it.Id ?? it.ID;
+    const lesson_id = it.lesson_id ?? it.lesson ?? it.lessonId ?? null;
+    let questions;
+    if (Array.isArray(it.questions)) {
+      // Some Bubble schemas store question IDs; keep as JSON for UI
+      questions = JSON.stringify(it.questions);
+    } else if (typeof it.questions === 'string') {
+      questions = it.questions;
+    } else {
+      questions = '[]';
+    }
+    return { ...it, id, lesson_id, questions };
+  });
+
+const normalizeJobs = (items = []) =>
+  (items || []).map((it) => {
+    const id = it.id ?? it._id ?? it.Id ?? it.ID;
+    const raw = it.required_level ?? it.min_level ?? null;
+    let required_level = null; // numeric if known
+    let required_level_ref = null; // Bubble id if reference
+    if (raw != null) {
+      if (typeof raw === 'object') {
+        required_level_ref = raw._id ?? raw.id ?? null;
+      } else if (typeof raw === 'string') {
+        const n = Number(raw);
+        if (Number.isFinite(n)) required_level = n; else required_level_ref = raw;
+      } else if (typeof raw === 'number') {
+        required_level = raw;
+      }
+    }
+    const is_active = typeof it.is_active === 'boolean' ? it.is_active : String(it.is_active).toLowerCase() !== 'false';
+    return {
+      ...it,
+      id,
+      required_level,
+      required_level_ref,
+      is_active,
+    };
+  });
+
+// Ensure cached arrays are normalized; if not, normalize and persist
+const ensureNormalized = (data, key) => {
+  const arr = Array.isArray(data[key]) ? data[key] : [];
+  if (arr.length === 0) return data;
+  const needsLevelFix = key === 'levels' && arr.some((x) => x && x.id == null && x._id != null);
+  const needsLessonFix = key === 'lessons' && arr.some((x) => (x && (x.id == null && x._id != null)) || (x && x.level_id == null && x.level != null));
+  const needsQuizFix = key === 'quizzes' && arr.some((x) => (x && (x.id == null && x._id != null)) || (x && x.lesson_id == null && x.lesson != null));
+  const needsJobFix = key === 'jobs' && arr.some((x) => x && x.id == null && x._id != null);
+
+  let normalized = arr;
+  if (key === 'levels' && needsLevelFix) normalized = normalizeLevels(arr);
+  if (key === 'lessons' && needsLessonFix) normalized = normalizeLessons(arr);
+  if (key === 'quizzes' && needsQuizFix) normalized = normalizeQuizzes(arr);
+  if (key === 'jobs' && needsJobFix) normalized = normalizeJobs(arr);
+
+  if (normalized !== arr) {
+    const updated = { ...data, [key]: normalized };
+    setWebData(updated);
+    return updated;
+  }
+  return data;
+};
+
 // Helper: fetch from Bubble when local cache is empty
-const fetchIfEmpty = async (key, fetcher) => {
-  const data = getWebData();
-  const items = Array.isArray(data[key]) ? data[key] : [];
+const fetchIfEmpty = async (key, fetcher, normalizer) => {
+  let data = getWebData();
+  data = ensureNormalized(data, key);
+  let items = Array.isArray(data[key]) ? data[key] : [];
   if (items.length > 0) return items;
   try {
     const remote = await fetcher();
-    if (Array.isArray(remote) && remote.length > 0) {
-      const updated = { ...data, [key]: remote };
+    const normalized = typeof normalizer === 'function' ? normalizer(remote) : remote;
+    if (Array.isArray(normalized) && normalized.length > 0) {
+      const updated = { ...data, [key]: normalized };
       setWebData(updated);
-      return remote;
+      return normalized;
     }
   } catch (err) {
     console.warn(`webDb: failed to fetch ${key} from Bubble`, err);
@@ -57,43 +148,47 @@ export const initDB = async () => {
 export const initWebDB = initDB;
 
 export const getLevelById = async (levelId) => {
-  const data = getWebData();
+  let data = getWebData();
+  data = ensureNormalized(data, 'levels');
   let levels = data.levels;
   if (!levels || levels.length === 0) {
-    levels = await fetchIfEmpty('levels', () => bubbleApi.listLevels());
+    levels = await fetchIfEmpty('levels', () => bubbleApi.listLevels(), normalizeLevels);
   }
-  return (levels || []).find(level => level.id === levelId) || null;
+  return (levels || []).find(level => String(level.id) === String(levelId)) || null;
 };
 
 export const getLessonsByLevel = async (levelId) => {
-  const data = getWebData();
+  let data = getWebData();
+  data = ensureNormalized(data, 'lessons');
   let lessons = data.lessons;
   if (!lessons || lessons.length === 0) {
-    lessons = await fetchIfEmpty('lessons', () => bubbleApi.listLessons());
+    lessons = await fetchIfEmpty('lessons', () => bubbleApi.listLessons(), normalizeLessons);
   }
   return (lessons || [])
-    .filter(lesson => lesson.level_id === levelId)
+    .filter(lesson => String(lesson.level_id) === String(levelId))
     .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
 };
 
 export const getLessonById = async (lessonId) => {
-  const data = getWebData();
+  let data = getWebData();
+  data = ensureNormalized(data, 'lessons');
   let lessons = data.lessons;
   if (!lessons || lessons.length === 0) {
-    lessons = await fetchIfEmpty('lessons', () => bubbleApi.listLessons());
+    lessons = await fetchIfEmpty('lessons', () => bubbleApi.listLessons(), normalizeLessons);
   }
-  return (lessons || []).find(lesson => lesson.id === lessonId) || null;
+  return (lessons || []).find(lesson => String(lesson.id) === String(lessonId)) || null;
 };
 
 export const getQuizByLessonId = async (lessonId) => {
   // Try to source a real quiz from Bubble if available, cached under quizzes
-  const data = getWebData();
+  let data = getWebData();
+  data = ensureNormalized(data, 'quizzes');
   let quizzes = data.quizzes;
   if (!Array.isArray(quizzes) || quizzes.length === 0) {
-    quizzes = await fetchIfEmpty('quizzes', () => bubbleApi.listQuizzes?.());
+    quizzes = await fetchIfEmpty('quizzes', () => bubbleApi.listQuizzes?.(), normalizeQuizzes);
   }
   const match = Array.isArray(quizzes)
-    ? quizzes.find(q => q.lesson_id === lessonId || q.id === lessonId)
+    ? quizzes.find(q => String(q.lesson_id) === String(lessonId) || String(q.id) === String(lessonId))
     : null;
   if (match) return match;
 
@@ -118,7 +213,12 @@ export const getQuizByLessonId = async (lessonId) => {
 };
 
 export const getAllLevels = async () => {
-  let levels = await fetchIfEmpty('levels', () => bubbleApi.listLevels());
+  let data = getWebData();
+  data = ensureNormalized(data, 'levels');
+  let levels = data.levels;
+  if (!levels || levels.length === 0) {
+    levels = await fetchIfEmpty('levels', () => bubbleApi.listLevels(), normalizeLevels);
+  }
   return (levels || []).sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
 };
 
@@ -160,8 +260,8 @@ export const saveProgress = async (lessonId, quizId = null, score = null, isComp
 };
 
 export const updateLessonDownloadStatus = async (lessonId, localFilePath, isDownloaded = true) => {
-  const data = getWebData();
-  const lesson = data.lessons.find(l => l.id === lessonId);
+  const data = ensureNormalized(getWebData(), 'lessons');
+  const lesson = data.lessons.find(l => String(l.id) === String(lessonId));
   if (lesson) {
     lesson.local_file_path = localFilePath;
     lesson.is_downloaded = isDownloaded ? 1 : 0;
@@ -171,9 +271,90 @@ export const updateLessonDownloadStatus = async (lessonId, localFilePath, isDown
 };
 
 export const getJobsByLevel = async (minLevel = 1) => {
-  let jobs = await fetchIfEmpty('jobs', () => bubbleApi.syncJobs?.() ?? []);
-  return (jobs || [])
-    .filter(job => job.required_level <= minLevel && job.is_active)
+  let data = getWebData();
+  // Ensure levels are available for mapping references → order_index
+  data = ensureNormalized(data, 'levels');
+  let levels = data.levels;
+  if (!levels || levels.length === 0) {
+    levels = await fetchIfEmpty('levels', () => bubbleApi.listLevels(), normalizeLevels);
+    // refresh local snapshot after potential set
+    data = getWebData();
+  }
+
+  // Load jobs
+  data = ensureNormalized(data, 'jobs');
+  let jobs = data.jobs;
+  const needsRefresh = Array.isArray(jobs) && jobs.length > 0 && !jobs.some(j => Object.prototype.hasOwnProperty.call(j, 'required_level_ref'));
+  if (!jobs || jobs.length === 0 || needsRefresh) {
+    try {
+      const remote = await (bubbleApi.listJobs?.() || bubbleApi.syncJobs?.() || Promise.resolve([]));
+      const normalized = normalizeJobs(remote);
+      const updated = { ...getWebData(), jobs: normalized };
+      setWebData(updated);
+      jobs = normalized;
+    } catch (e) {
+      console.warn('webDb: failed to refresh jobs, falling back to cache', e);
+      if (!jobs) jobs = [];
+    }
+  }
+
+  // Build mapping: level id (string) → order_index (numeric 1..N)
+  let sortedLevels = (levels || []).slice().sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+  let idToOrder = new Map();
+  const buildMap = () => {
+    idToOrder = new Map();
+    sortedLevels.forEach((lvl, idx) => {
+      const key = String(lvl.id ?? lvl._id);
+      const order = lvl.order_index ?? idx + 1;
+      idToOrder.set(key, order);
+    });
+  };
+  buildMap();
+
+  // If we have jobs that reference level IDs not present in our map (legacy cache), refresh levels once
+  const missingRef = (jobs || []).some(j => j.required_level_ref && !idToOrder.has(String(j.required_level_ref)));
+  if (missingRef) {
+    try {
+      const remoteLvls = await bubbleApi.listLevels?.();
+      if (Array.isArray(remoteLvls) && remoteLvls.length) {
+        const normalizedLvls = normalizeLevels(remoteLvls);
+        const updated = { ...getWebData(), levels: normalizedLvls };
+        setWebData(updated);
+        sortedLevels = normalizedLvls.slice().sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+        buildMap();
+      }
+    } catch (e) {
+      console.warn('webDb: failed to refresh levels for job mapping', e);
+    }
+  }
+
+  // Ensure each job has a numeric required_level using either numeric value or referenced level order_index
+  const jobsWithNumeric = (jobs || []).map((job) => {
+    // Important: Number(null) === 0, so handle nullish explicitly
+    let rl = (typeof job.required_level === 'number' && Number.isFinite(job.required_level))
+      ? job.required_level
+      : NaN;
+    if (!Number.isFinite(rl)) {
+      const ref = job.required_level_ref || job.required_level; // try both
+      if (ref != null) {
+        const mapped = idToOrder.get(String(ref));
+        if (Number.isFinite(mapped)) rl = mapped;
+      }
+    }
+    // Clamp to at least 1
+    if (!Number.isFinite(rl) || rl <= 0) rl = 1;
+    return { ...job, required_level: rl };
+  });
+
+  // Persist corrected numeric levels back to cache
+  try {
+    const updatedData = { ...getWebData(), jobs: jobsWithNumeric };
+    setWebData(updatedData);
+  } catch {}
+
+  const userMin = Number(minLevel) || 1;
+  return jobsWithNumeric
+    .filter(job => Number(job.required_level) <= userMin && job.is_active)
     .sort((a, b) => (a.required_level ?? 0) - (b.required_level ?? 0));
 };
 

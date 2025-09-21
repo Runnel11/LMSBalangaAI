@@ -3,15 +3,15 @@
 ## 📋 **Three Options for Quiz/Questions**
 
 ### **Option 1: Fixed 4 Options (Original)**
-Import: `levels.csv` → `lessons.csv` → `quizzes.csv` → `jobs.csv`
+Import: `levels.csv` → `lessons.csv` → `quizzes.csv` → `jobs.csv` → `community_posts.csv`
 - Questions stored as JSON with exactly 4 options each
 
 ### **Option 2: Flexible Options as JSON (Recommended)**
-Import: `levels.csv` → `lessons.csv` → `quizzes_flexible.csv` → `jobs.csv`
+Import: `levels.csv` → `lessons.csv` → `quizzes_flexible.csv` → `jobs.csv` → `community_posts.csv`
 - Questions stored as JSON with variable number of options (3-5 options per question)
 
 ### **Option 3: Individual Question Records with Flexible Options**
-Import: `levels.csv` → `lessons.csv` → `quizzes_simple.csv` → `questions_flexible.csv` → `jobs.csv`
+Import: `levels.csv` → `lessons.csv` → `quizzes_simple.csv` → `questions_flexible.csv` → `jobs.csv` → `community_posts.csv`
 - Questions stored as separate records with options as JSON array
 
 ## 🔧 **Bubble.io Import Instructions**
@@ -64,6 +64,23 @@ Import: `levels.csv` → `lessons.csv` → `quizzes_simple.csv` → `questions_f
 4. **Important**: For `required_level` column, map to existing Level records by ID
 5. Map `is_active` as Yes/No field
 
+### **Step 6: Import Community Posts**
+1. Click **Community Post** data type (create if missing)
+2. Click **Import CSV**
+3. Upload `community_posts.csv`
+4. Suggested fields for the data type and mapping:
+   - `title` (text) → `title`
+   - `author` (text) → `author` (or a User reference if you already have Users; if so, replace with user_id and map accordingly)
+   - `category` (text) → `category`
+   - `content` (text, long text) → `content`
+   - `posted_at` (date) → `posted_at` (Bubble will detect ISO 8601)
+   - `likes` (number) → `likes`
+   - `replies` (number) → `replies`
+   - `is_pinned` (yes/no) → `is_pinned`
+   - `is_active` (yes/no) → `is_active`
+5. Verify that dates import correctly (ISO 8601 like `2024-03-01T10:15:00Z`)
+6. Privacy rules: allow read via Data API for version-test if you want to fetch posts in the app
+
 ## ⚠️ **Important Notes**
 
 - **Questions Format**: The questions field in quizzes.csv contains escaped JSON strings
@@ -78,6 +95,7 @@ After importing, verify:
 - 8 Lessons created (2 per level)
 - 8 Quizzes created (1 per lesson)
 - 8 Jobs created (2 per level)
+ - 10–15 Community Posts created (from `community_posts.csv`)
 
 ## 🚀 **Next Steps**
 

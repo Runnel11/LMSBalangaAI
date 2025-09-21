@@ -1,23 +1,26 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Alert } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router } from 'expo-router';
 
-import { TopAppBar } from '@/src/components/ui/TopAppBar';
 import { Button } from '@/src/components/ui/Button';
-import { getLessonById, getQuizByLessonId, saveProgress, getProgress } from '@/src/db/index';
-import { 
-  downloadLesson, 
-  getLocalLessonContent,
-  isNetworkAvailable 
-} from '@/src/services/downloadManager';
-import { colors, typography, spacing, borderRadius } from '@/src/config/theme';
+import { TopAppBar } from '@/src/components/ui/TopAppBar';
+import { borderRadius, colors, spacing, typography } from '@/src/config/theme';
+import { getLessonById, getProgress, getQuizByLessonId, saveProgress } from '@/src/db/index';
+// CommonJS module, prefer require to avoid TS named export issues
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const downloadManager = require('@/src/services/downloadManager');
+
+// Lightweight types for local safety
+type Lesson = { id: string | number; title: string; description?: string; estimated_duration?: number; is_downloaded?: boolean };
+type LessonContent = { id: string | number; title: string; content: string; duration?: number } | null;
+type Quiz = { id: string | number } | null;
 
 export default function LessonScreen() {
   const { lessonId } = useLocalSearchParams();
-  const [lesson, setLesson] = useState(null);
-  const [lessonContent, setLessonContent] = useState(null);
-  const [quiz, setQuiz] = useState(null);
+  const [lesson, setLesson] = useState<Lesson | null>(null);
+  const [lessonContent, setLessonContent] = useState<LessonContent>(null);
+  const [quiz, setQuiz] = useState<Quiz>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -25,30 +28,28 @@ export default function LessonScreen() {
   const loadLessonData = async () => {
     try {
       setLoading(true);
-      const lessonData = await getLessonById(Number(lessonId));
-      const quizData = await getQuizByLessonId(Number(lessonId));
-      const progressData = await getProgress(Number(lessonId));
-      
-      setLesson(lessonData);
-      setQuiz(quizData);
-      setIsCompleted(progressData.length > 0 && progressData[0].is_completed);
+      const idStr = String(lessonId);
+      const lessonData = await getLessonById(idStr);
+      const quizData = await getQuizByLessonId(idStr);
+      const progressData: any[] = await getProgress(idStr as any);
 
-      // Try to load local content first, fallback to online content
-      let content = null;
-      if (lessonData?.is_downloaded) {
-        content = await getLocalLessonContent(lessonData);
+      setLesson(lessonData as Lesson);
+      setQuiz((quizData as any) as Quiz);
+      setIsCompleted(Array.isArray(progressData) && progressData.length > 0 && !!progressData[0].is_completed);
+
+      // Try local content first, then fallback to lesson.content
+      let content: LessonContent = null;
+      if ((lessonData as any)?.is_downloaded) {
+        content = await downloadManager.getLocalLessonContent(lessonData);
       }
-      
       if (!content && lessonData) {
-        // Use the content from database as fallback
         content = {
-          id: lessonData.id,
-          title: lessonData.title,
-          content: lessonData.content || 'Content not available offline. Please download this lesson.',
-          duration: lessonData.estimated_duration
+          id: (lessonData as any).id,
+          title: (lessonData as any).title,
+          content: (lessonData as any).content || 'Content not available offline. Please download this lesson.',
+          duration: (lessonData as any).estimated_duration,
         };
       }
-      
       setLessonContent(content);
     } catch (error) {
       console.error('Error loading lesson data:', error);
@@ -67,7 +68,7 @@ export default function LessonScreen() {
   const handleDownloadLesson = async () => {
     if (!lesson || downloading) return;
 
-    const networkAvailable = await isNetworkAvailable();
+    const networkAvailable = await downloadManager.isNetworkAvailable();
     if (!networkAvailable) {
       Alert.alert('No Internet', 'Please connect to the internet to download lessons.');
       return;
@@ -75,10 +76,10 @@ export default function LessonScreen() {
 
     setDownloading(true);
     try {
-      const result = await downloadLesson(lesson);
+      const result = await downloadManager.downloadLesson(lesson);
       if (result.success) {
         Alert.alert('Downloaded', 'Lesson has been downloaded for offline access.');
-        await loadLessonData(); // Refresh to show updated content
+        await loadLessonData();
       } else {
         Alert.alert('Download Failed', result.message || 'Failed to download lesson.');
       }
@@ -92,9 +93,8 @@ export default function LessonScreen() {
 
   const handleMarkComplete = async () => {
     if (!lesson) return;
-
     try {
-      await saveProgress(lesson.id, null, null, true);
+      await saveProgress((lesson as any).id, null, null, true);
       setIsCompleted(true);
       Alert.alert('Completed', 'Lesson marked as complete!');
     } catch (error) {
@@ -105,7 +105,7 @@ export default function LessonScreen() {
 
   const handleStartQuiz = () => {
     if (quiz) {
-      router.push(`/quiz/${quiz.id}`);
+      router.push(`/quiz/${String((quiz as any).id)}`);
     } else {
       Alert.alert('No Quiz', 'This lesson does not have a quiz.');
     }
@@ -113,41 +113,29 @@ export default function LessonScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
-        <TopAppBar
-          title="Loading..."
-          showBackButton
-          onBackPress={() => router.back()}
-        />
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading lesson...</Text>
+  <SafeAreaView style={styles.container as any} edges={['bottom']}>
+        <TopAppBar title="Loading..." showBackButton onBackPress={() => router.back()} />
+        <View style={styles.loadingContainer as any}>
+          <Text style={styles.loadingText as any}>Loading lesson...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <TopAppBar
-        title={lesson?.title || 'Lesson'}
-        showBackButton
-        onBackPress={() => router.back()}
-      />
-      
-      <ScrollView style={styles.content}>
+  <SafeAreaView style={styles.container as any} edges={['bottom']}>
+      <TopAppBar title={lesson?.title || 'Lesson'} showBackButton onBackPress={() => router.back()} />
+
+  <ScrollView style={styles.content as any}>
         {lesson && (
           <>
-            <View style={styles.header}>
-              <Text style={styles.lessonTitle}>{lesson.title}</Text>
-              <Text style={styles.lessonDescription}>{lesson.description}</Text>
-              
-              <View style={styles.metaInfo}>
-                <Text style={styles.duration}>
-                  ⏱️ {lesson.estimated_duration} minutes
-                </Text>
-                {isCompleted && (
-                  <Text style={styles.completedBadge}>✅ Completed</Text>
-                )}
+            <View style={styles.header as any}>
+              <Text style={styles.lessonTitle as any}>{lesson.title}</Text>
+              <Text style={styles.lessonDescription as any}>{lesson.description}</Text>
+
+              <View style={styles.metaInfo as any}>
+                <Text style={styles.duration as any}>⏱️ {lesson.estimated_duration} minutes</Text>
+                {isCompleted && <Text style={styles.completedBadge as any}>✅ Completed</Text>}
               </View>
 
               {!lesson.is_downloaded && (
@@ -157,44 +145,42 @@ export default function LessonScreen() {
                   variant="tertiary"
                   loading={downloading}
                   disabled={downloading}
-                  style={styles.downloadButton}
+                  style={styles.downloadButton as any}
                   accessibilityLabel="Download lesson for offline access"
                 />
               )}
             </View>
 
-            <View style={styles.contentSection}>
-              <Text style={styles.sectionTitle}>Lesson Content</Text>
-              
-              <View style={styles.contentContainer}>
+            <View style={styles.contentSection as any}>
+              <Text style={styles.sectionTitle as any}>Lesson Content</Text>
+
+              <View style={styles.contentContainer as any}>
                 {lessonContent ? (
-                  <Text style={styles.contentText}>
-                    {lessonContent.content}
-                  </Text>
+                  <Text style={styles.contentText as any}>{lessonContent.content}</Text>
                 ) : (
-                  <Text style={styles.noContentText}>
+                  <Text style={styles.noContentText as any}>
                     Content not available. Please download this lesson for offline access.
                   </Text>
                 )}
               </View>
             </View>
 
-            <View style={styles.actionsSection}>
+            <View style={styles.actionsSection as any}>
               {!isCompleted && (
                 <Button
                   title="Mark as Complete"
                   onPress={handleMarkComplete}
-                  style={styles.actionButton}
+                  style={styles.actionButton as any}
                   accessibilityLabel="Mark this lesson as complete"
                 />
               )}
-              
+
               {quiz && (
                 <Button
                   title="Take Quiz"
                   onPress={handleStartQuiz}
                   variant="secondary"
-                  style={styles.actionButton}
+                  style={styles.actionButton as any}
                   accessibilityLabel="Take the quiz for this lesson"
                 />
               )}
@@ -210,82 +196,82 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-  },
+  } as import('react-native').ViewStyle,
   content: {
     flex: 1,
-  },
+  } as import('react-native').ViewStyle,
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
+  } as import('react-native').ViewStyle,
   loadingText: {
     ...typography.body1,
     color: colors.textSecondary,
-  },
+  } as import('react-native').TextStyle,
   header: {
     padding: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-  },
+  } as import('react-native').ViewStyle,
   lessonTitle: {
     ...typography.h2,
     color: colors.textPrimary,
     marginBottom: spacing.sm,
-  },
+  } as import('react-native').TextStyle,
   lessonDescription: {
     ...typography.body1,
     color: colors.textSecondary,
     marginBottom: spacing.md,
     lineHeight: 24,
-  },
+  } as import('react-native').TextStyle,
   metaInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: spacing.md,
-  },
+  } as import('react-native').ViewStyle,
   duration: {
     ...typography.body2,
     color: colors.textSecondary,
-  },
+  } as import('react-native').TextStyle,
   completedBadge: {
     ...typography.body2,
     color: colors.success,
     fontWeight: '600',
-  },
+  } as import('react-native').TextStyle,
   downloadButton: {
     marginTop: spacing.sm,
-  },
+  } as import('react-native').ViewStyle,
   contentSection: {
     padding: spacing.lg,
-  },
+  } as import('react-native').ViewStyle,
   sectionTitle: {
     ...typography.h3,
     color: colors.textPrimary,
     marginBottom: spacing.md,
-  },
+  } as import('react-native').TextStyle,
   contentContainer: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     padding: spacing.lg,
-  },
+  } as import('react-native').ViewStyle,
   contentText: {
     ...typography.body1,
     color: colors.textPrimary,
     lineHeight: 24,
-  },
+  } as import('react-native').TextStyle,
   noContentText: {
     ...typography.body1,
     color: colors.textSecondary,
     fontStyle: 'italic',
     textAlign: 'center',
-  },
+  } as import('react-native').TextStyle,
   actionsSection: {
     padding: spacing.lg,
     gap: spacing.md,
-  },
+  } as import('react-native').ViewStyle,
   actionButton: {
     marginBottom: spacing.sm,
-  },
+  } as import('react-native').ViewStyle,
 });
