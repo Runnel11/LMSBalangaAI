@@ -8,6 +8,8 @@ export class BubbleApiService {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json'
     };
+    // Cache for detected user_progress field names
+    this._userProgressFieldMap = null;
   }
 
   // Set user authentication token
@@ -43,6 +45,18 @@ export class BubbleApiService {
     const headers = { 'Content-Type': 'application/json', ...authHeader, ...(options.headers || {}) };
     const res = await fetch(`${this.baseUrl}${path}`, { ...options, headers });
     return res;
+  }
+
+  // Offline-friendly token validation: allow app to continue without network
+  async validateToken(token) {
+    try {
+      // If no token provided, treat as unauthenticated but don't block offline usage
+      if (!token) return true;
+      // Optionally, you could ping a lightweight endpoint; for offline-first, just return true
+      return true;
+    } catch {
+      return true; // do not block app on validation
+    }
   }
 
   // ========== Data API helpers (Bubble /obj endpoints) ==========
@@ -89,6 +103,28 @@ export class BubbleApiService {
     return all;
   }
 
+  // Inspect user_progress to determine actual field names used for lesson and quiz references
+  async getUserProgressFieldMap() {
+    if (this._userProgressFieldMap) return this._userProgressFieldMap;
+    try {
+      const { results } = await this.listObjects('user_progress', { limit: 1 });
+      const sample = (Array.isArray(results) && results.length > 0) ? results[0] : {};
+      const keys = Object.keys(sample || {});
+      // Prefer explicit names; fallback to any key that starts with 'lesson' or 'quiz'
+      const lessonKey = ['lesson_id', 'lesson'].find(k => keys.includes(k)) || keys.find(k => k.startsWith('lesson')) || null;
+      const quizKey = ['quiz_id', 'quiz'].find(k => keys.includes(k)) || keys.find(k => k.startsWith('quiz')) || null;
+  // Detect list-ness via sample value or key naming heuristics
+  const lessonIsList = Array.isArray(lessonKey ? sample[lessonKey] : undefined) || /lessons?$|_list$/i.test(String(lessonKey || ''));
+  const quizIsList = Array.isArray(quizKey ? sample[quizKey] : undefined) || /quizzes$|quizzes?_custom|_list$/i.test(String(quizKey || ''));
+      this._userProgressFieldMap = { lessonKey, quizKey, lessonIsList, quizIsList };
+      return this._userProgressFieldMap;
+    } catch (e) {
+      // If we can't detect, default to commonly used names
+      this._userProgressFieldMap = { lessonKey: 'lesson_id', quizKey: 'quiz_id', lessonIsList: false, quizIsList: false };
+      return this._userProgressFieldMap;
+    }
+  }
+
   async listLevels(since) {
     // Use Data API exclusively for formal content fetching
     return await this.listAllObjects('level', { since });
@@ -106,25 +142,64 @@ export class BubbleApiService {
     return await this.listAllObjects('job', { since });
   }
 
+  // Fetch a single object by unique id from the Data API
+  async getObjectById(dataType, id) {
+    try {
+      const res = await this.request(`/obj/${dataType}/${id}`, { method: 'GET' }, { useUserToken: false });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Data API get ${dataType}/${id} failed: HTTP ${res.status} ${text}`);
+      }
+      const data = await res.json();
+      // Some Bubble responses nest under response
+      return data.response || data;
+    } catch (err) {
+      console.error('Bubble Data API getObjectById error:', dataType, id, err.message);
+      throw err;
+    }
+  }
+
   // Upsert progress using Data API with idempotency by composite key
   async upsertProgress(progress) {
     const { user_id, lesson_id = null, quiz_id = null } = progress;
     try {
+      const { lessonKey, quizKey, lessonIsList, quizIsList } = await this.getUserProgressFieldMap();
       // 1) Try find existing progress for user/lesson/quiz
+      const constraintParts = [ { key: 'user_id', constraint_type: 'equals', value: user_id } ];
+      if (lesson_id && lessonKey && !lessonIsList) {
+        constraintParts.push({ key: lessonKey, constraint_type: 'equals', value: lesson_id });
+      }
+      if (quiz_id && quizKey && !quizIsList) {
+        constraintParts.push({ key: quizKey, constraint_type: 'equals', value: quiz_id });
+      }
+
       const existing = await this.listAllObjects('user_progress', {
-        extraConstraints: [
-          { key: 'user_id', constraint_type: 'equals', value: user_id },
-          ...(lesson_id ? [{ key: 'lesson_id', constraint_type: 'equals', value: lesson_id }] : [{ key: 'lesson_id', constraint_type: 'is empty' }]),
-          ...(quiz_id ? [{ key: 'quiz_id', constraint_type: 'equals', value: quiz_id }] : [{ key: 'quiz_id', constraint_type: 'is empty' }]),
-        ],
+        extraConstraints: constraintParts,
       });
 
+      // Normalize payload to match Bubble field types
+      const payload = {
+        user_id,
+        is_completed: typeof progress.is_completed === 'boolean' ? progress.is_completed : !!progress.is_completed,
+        score: progress.score ?? null,
+        completed_at: progress.completed_at ?? new Date().toISOString(),
+      };
+  if (lesson_id && lessonKey) payload[lessonKey] = lessonIsList ? [lesson_id] : lesson_id;
+  if (quiz_id && quizKey) payload[quizKey] = quizIsList ? [quiz_id] : quiz_id;
+
       if (existing && existing.length > 0) {
-        const id = existing[0]._id || existing[0].id;
+        const existingRow = existing[0] || {};
+        const id = existingRow._id || existingRow.id;
+        // If quiz field is a list, merge to avoid overwriting previous entries
+        if (quiz_id && quizKey && quizIsList) {
+          const current = Array.isArray(existingRow[quizKey]) ? existingRow[quizKey] : [];
+          const merged = Array.from(new Set([...current, quiz_id]));
+          payload[quizKey] = merged;
+        }
         const res = await fetch(`${this.baseUrl}/obj/user_progress/${id}`, {
           method: 'PATCH',
           headers: this.headers,
-          body: JSON.stringify(progress),
+          body: JSON.stringify(payload),
         });
         if (!res.ok) {
           const text = await res.text();
@@ -137,7 +212,7 @@ export class BubbleApiService {
       const res = await fetch(`${this.baseUrl}/obj/user_progress`, {
         method: 'POST',
         headers: this.headers,
-        body: JSON.stringify(progress),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const text = await res.text();

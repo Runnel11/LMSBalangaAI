@@ -58,9 +58,9 @@ const normalizeQuizzes = (items = []) =>
   (items || []).map((it) => {
     const id = it.id ?? it._id ?? it.Id ?? it.ID;
     const lesson_id = it.lesson_id ?? it.lesson ?? it.lessonId ?? null;
+    // Preserve questions as-is; we'll resolve later if they are IDs
     let questions;
     if (Array.isArray(it.questions)) {
-      // Some Bubble schemas store question IDs; keep as JSON for UI
       questions = JSON.stringify(it.questions);
     } else if (typeof it.questions === 'string') {
       questions = it.questions;
@@ -190,7 +190,41 @@ export const getQuizByLessonId = async (lessonId) => {
   const match = Array.isArray(quizzes)
     ? quizzes.find(q => String(q.lesson_id) === String(lessonId) || String(q.id) === String(lessonId))
     : null;
-  if (match) return match;
+  if (match) {
+    // If questions are an array of IDs, resolve them to full question objects once
+    try {
+      const parsed = typeof match.questions === 'string' ? JSON.parse(match.questions) : match.questions;
+      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
+        // Resolve each ID via Data API
+        const resolved = [];
+        for (const qid of parsed) {
+          try {
+            const q = await bubbleApi.getObjectById('question', qid);
+            // Normalize to UI shape
+            resolved.push({
+              question: q.question || '',
+              options: Array.isArray(q.options) ? q.options.map((o) => String(o).replace(/^"|"$/g, '')) : [],
+              correct: typeof q.correct === 'number' ? q.correct : 0,
+            });
+          } catch (e) {
+            // Skip if cannot resolve
+          }
+        }
+        if (resolved.length > 0) {
+          const updated = { ...match, questions: JSON.stringify(resolved) };
+          // Persist back to cache so future loads are fast
+          const fresh = getWebData();
+          const idx = (fresh.quizzes || []).findIndex(q => String(q.id) === String(match.id));
+          if (idx >= 0) {
+            fresh.quizzes[idx] = updated;
+            setWebData(fresh);
+          }
+          return updated;
+        }
+      }
+    } catch {}
+    return match;
+  }
 
   // Fallback: lightweight generated quiz to avoid breaking the UI
   return {

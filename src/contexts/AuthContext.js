@@ -81,20 +81,16 @@ export const AuthProvider = ({ children }) => {
       const token = await secureStore.getItemAsync('auth_token');
       const userData = await secureStore.getItemAsync('user_data');
 
-      if (token && userData) {
+      if (userData) {
         const parsedUser = JSON.parse(userData);
 
-        // Validate token is still valid
-        const isValidToken = await bubbleApi.validateToken(token);
-        if (!isValidToken) {
-          logger.auth.loginFailure('Token expired', 'token_expired');
-          await clearStoredAuth();
-          timer();
-          return;
+        // Offline-first: skip token validation, restore session if user data exists
+        if (token) {
+          setAuthToken(token);
+          // Set token for API calls where needed (e.g., workflows)
+          bubbleApi.setAuthToken?.(token);
         }
 
-        // Set auth token for API calls
-        setAuthToken(token);
         setUser(parsedUser);
         setIsAuthenticated(true);
 

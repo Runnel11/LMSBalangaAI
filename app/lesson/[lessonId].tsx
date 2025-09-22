@@ -6,7 +6,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/src/components/ui/Button';
 import { TopAppBar } from '@/src/components/ui/TopAppBar';
 import { borderRadius, colors, spacing, typography } from '@/src/config/theme';
-import { getLessonById, getProgress, getQuizByLessonId, saveProgress } from '@/src/db/index';
+import { getLessonById, getProgress, getQuizByLessonId } from '@/src/db/index';
+import { offlineManager } from '@/src/services/offlineManager';
 import { logger } from '@/src/utils/logger';
 // CommonJS module, prefer require to avoid TS named export issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -64,7 +65,7 @@ export default function LessonScreen() {
       timer();
     } catch (error) {
       timer();
-      logger.db.error('lesson_load', `Failed to load lesson ${lessonId}: ${error.message}`);
+  logger.db.error('lesson_load', `Failed to load lesson ${lessonId}: ${(error as any)?.message || error}`);
       console.error('Error loading lesson data:', error);
       Alert.alert('Error', 'Failed to load lesson data.');
     } finally {
@@ -109,14 +110,14 @@ export default function LessonScreen() {
     const timer = logger.startTimer('Mark lesson complete');
     try {
       logger.db.query('progress', `Marking lesson ${lesson.id} as complete`);
-      await saveProgress((lesson as any).id, null, null, true);
+  await offlineManager.saveUserProgress((lesson as any).id, null, null, true);
       setIsCompleted(true);
       timer();
       logger.db.query('progress', `Successfully marked lesson ${lesson.id} as complete`);
       Alert.alert('Completed', 'Lesson marked as complete!');
     } catch (error) {
       timer();
-      logger.db.error('progress_save', `Failed to mark lesson ${lesson.id} complete: ${error.message}`);
+  logger.db.error('progress_save', `Failed to mark lesson ${lesson.id} complete: ${(error as any)?.message || error}`);
       console.error('Error marking lesson complete:', error);
       Alert.alert('Error', 'Failed to mark lesson as complete.');
     }

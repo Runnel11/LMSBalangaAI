@@ -1,12 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-    getAllLevels,
-    getLessonsByLevel,
-    getProgress,
-    insertJobFromBubble,
-    insertLessonFromBubble,
-    insertLevelFromBubble,
-    insertQuizFromBubble
+  getAllLevels,
+  getLessonsByLevel,
+  getProgress,
+  insertJobFromBubble,
+  insertLessonFromBubble,
+  insertLevelFromBubble,
+  insertQuizFromBubble
 } from '../db/index';
 import { bubbleApi } from './bubbleApi';
 import { networkService } from './networkService';
@@ -97,12 +97,14 @@ export class SyncService {
       const localProgress = await getProgress();
 
       for (const progress of localProgress) {
-        await bubbleApi.syncUserProgress(userId, {
-          lesson_id: progress.lesson_id,
-          quiz_id: progress.quiz_id,
+        // Idempotent upsert to avoid duplicates
+        await bubbleApi.upsertProgress({
+          user_id: userId,
+          lesson_id: progress.lesson_id ?? null,
+          quiz_id: progress.quiz_id ?? null,
           is_completed: progress.is_completed,
           score: progress.score,
-          completed_at: progress.completed_at
+          completed_at: progress.completed_at,
         });
       }
 

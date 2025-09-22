@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Alert, TouchableOpacity } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router } from 'expo-router';
 
-import { TopAppBar } from '@/src/components/ui/TopAppBar';
 import { Button } from '@/src/components/ui/Button';
 import { ProgressBar } from '@/src/components/ui/ProgressBar';
-import { getLessonById, saveProgress, getProgress, getQuizByLessonId } from '@/src/db/index';
-import { Platform } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '@/src/config/theme';
+import { TopAppBar } from '@/src/components/ui/TopAppBar';
+import { borderRadius, colors, spacing, typography } from '@/src/config/theme';
+import { getLessonById, getQuizByLessonId } from '@/src/db/index';
+import { offlineManager } from '@/src/services/offlineManager';
 import { logger } from '@/src/utils/logger';
 
 interface Question {
@@ -18,8 +18,8 @@ interface Question {
 }
 
 interface QuizData {
-  id: number;
-  lesson_id: number;
+  id: string | number;
+  lesson_id: string | number;
   title: string;
   questions: Question[];
 }
@@ -41,7 +41,8 @@ export default function QuizScreen() {
       logger.db.query('quiz', `Loading quiz data for quiz ID: ${quizId}`);
 
       // Use the unified database interface
-      const quizData = await getQuizByLessonId(Number(quizId));
+  // Important: Bubble IDs are strings; do not coerce to Number()
+  const quizData = await getQuizByLessonId(String(quizId));
       
       if (quizData) {
         const lessonData = await getLessonById(quizData.lesson_id);
@@ -64,7 +65,7 @@ export default function QuizScreen() {
       }
     } catch (error) {
       timer();
-      logger.db.error('quiz_load', `Failed to load quiz ${quizId}: ${error.message}`);
+  logger.db.error('quiz_load', `Failed to load quiz ${quizId}: ${(error as any)?.message || error}`);
       console.error('Error loading quiz data:', error);
       Alert.alert('Error', 'Failed to load quiz data.');
     } finally {
@@ -116,12 +117,13 @@ export default function QuizScreen() {
     logger.db.query('quiz', `Quiz completed: ${correctAnswers}/${quiz.questions.length} correct (${finalScore}%)`);
 
     try {
-      await saveProgress(quiz.lesson_id, quiz.id, finalScore, true);
+  // Types in db may be narrower; cast to keep RN TS happy
+  await offlineManager.saveUserProgress(quiz.lesson_id as any, quiz.id as any, finalScore, true);
       timer();
       logger.db.query('progress', `Successfully saved quiz progress: Lesson ${quiz.lesson_id}, Quiz ${quiz.id}, Score ${finalScore}%`);
     } catch (error) {
       timer();
-      logger.db.error('progress_save', `Failed to save quiz progress: ${error.message}`);
+  logger.db.error('progress_save', `Failed to save quiz progress: ${(error as any)?.message || error}`);
       console.error('Error saving quiz progress:', error);
       Alert.alert('Warning', 'Quiz completed but progress could not be saved.');
     }
@@ -141,14 +143,14 @@ export default function QuizScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
+  <SafeAreaView style={styles.container as any} edges={['bottom']}>
         <TopAppBar
           title="Loading..."
           showBackButton
           onBackPress={() => router.back()}
         />
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading quiz...</Text>
+  <View style={styles.loadingContainer as any}>
+          <Text style={styles.loadingText as any}>Loading quiz...</Text>
         </View>
       </SafeAreaView>
     );
@@ -156,14 +158,14 @@ export default function QuizScreen() {
 
   if (!quiz) {
     return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
+  <SafeAreaView style={styles.container as any} edges={['bottom']}>
         <TopAppBar
           title="Quiz"
           showBackButton
           onBackPress={() => router.back()}
         />
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Quiz not found.</Text>
+  <View style={styles.errorContainer as any}>
+          <Text style={styles.errorText as any}>Quiz not found.</Text>
         </View>
       </SafeAreaView>
     );
@@ -171,28 +173,28 @@ export default function QuizScreen() {
 
   if (showResults) {
     return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
+  <SafeAreaView style={styles.container as any} edges={['bottom']}>
         <TopAppBar
           title="Quiz Results"
           showBackButton
           onBackPress={() => router.back()}
         />
-        <ScrollView style={styles.content}>
-          <View style={styles.resultsContainer}>
-            <Text style={styles.resultsTitle}>Quiz Completed!</Text>
-            <Text style={styles.scoreText}>Your Score: {score}%</Text>
+  <ScrollView style={styles.content as any}>
+          <View style={styles.resultsContainer as any}>
+            <Text style={styles.resultsTitle as any}>Quiz Completed!</Text>
+            <Text style={styles.scoreText as any}>Your Score: {score}%</Text>
             
-            <View style={styles.scoreBreakdown}>
-              <Text style={styles.breakdownText}>
+            <View style={styles.scoreBreakdown as any}>
+              <Text style={styles.breakdownText as any}>
                 {quiz.questions.filter((_, index) => selectedAnswers[index] === quiz.questions[index].correct).length} out of {quiz.questions.length} correct
               </Text>
             </View>
 
-            <View style={styles.resultsSummary}>
+            <View style={styles.resultsSummary as any}>
               {quiz.questions.map((question, index) => (
-                <View key={index} style={styles.questionResult}>
-                  <Text style={styles.questionNumber}>Question {index + 1}</Text>
-                  <Text style={styles.questionText}>{question.question}</Text>
+                <View key={index} style={styles.questionResult as any}>
+                  <Text style={styles.questionNumber as any}>Question {index + 1}</Text>
+                  <Text style={styles.questionText as any}>{question.question}</Text>
                   <Text style={[
                     styles.answerResult,
                     selectedAnswers[index] === question.correct ? styles.correctAnswer : styles.incorrectAnswer

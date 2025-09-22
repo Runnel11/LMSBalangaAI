@@ -18,6 +18,7 @@ export const OfflineProvider = ({ children }) => {
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
   const [offlineData, setOfflineData] = useState(null);
+  const [uiSyncInFlight, setUiSyncInFlight] = useState(false);
 
   useEffect(() => {
     initializeOfflineManager();
@@ -42,6 +43,18 @@ export const OfflineProvider = ({ children }) => {
       const cachedData = await offlineManager.getOfflineData();
       setOfflineData(cachedData);
 
+      // If we start online and there are pending items, auto-flush immediately
+      if (status.isOnline && status.pendingSyncCount > 0 && !uiSyncInFlight) {
+        setUiSyncInFlight(true);
+        try {
+          await offlineManager.syncPendingData();
+        } finally {
+          const refreshed = offlineManager.getOfflineStatus();
+          setPendingSyncCount(refreshed.pendingSyncCount);
+          setUiSyncInFlight(false);
+        }
+      }
+
       // Listen for network changes
       const unsubscribe = networkService.addListener((online, connType) => {
         setIsOnline(online);
@@ -51,7 +64,19 @@ export const OfflineProvider = ({ children }) => {
         setTimeout(async () => {
           const updatedStatus = offlineManager.getOfflineStatus();
           setPendingSyncCount(updatedStatus.pendingSyncCount);
-        }, 1000);
+
+          // Auto-flush queue when we come online and have pending work
+          if (online && updatedStatus.pendingSyncCount > 0 && !uiSyncInFlight) {
+            setUiSyncInFlight(true);
+            try {
+              await offlineManager.syncPendingData();
+            } finally {
+              const refreshed = offlineManager.getOfflineStatus();
+              setPendingSyncCount(refreshed.pendingSyncCount);
+              setUiSyncInFlight(false);
+            }
+          }
+        }, 500);
       });
 
       setIsInitialized(true);
@@ -123,14 +148,15 @@ export const OfflineProvider = ({ children }) => {
   const getOfflineStatusMessage = () => {
     if (isOnline) {
       if (pendingSyncCount > 0) {
-        return `Online (${pendingSyncCount} items syncing)`;
+        const noun = pendingSyncCount === 1 ? 'item' : 'items';
+        return `Online (syncing ${pendingSyncCount} ${noun})`;
       }
       return `Online (${connectionType})`;
     } else {
       if (offlineData) {
-        return 'Offline mode';
+        return 'Offline (using cached data)';
       }
-      return 'Offline - Limited functionality';
+      return 'Offline – limited functionality';
     }
   };
 

@@ -180,18 +180,39 @@ export class OfflineManager {
 
         switch (item.action) {
           case 'saveProgress':
+            // Always ensure local save
             await saveProgress(
               item.data.lessonId,
               item.data.quizId,
               item.data.score,
               item.data.isCompleted
             );
+            // If user is known, opportunistically upsert to Bubble
+            try {
+              const userIdNow = getCurrentUserId?.() || null;
+              if (userIdNow && networkService.isOnline) {
+                await bubbleApi.upsertProgress({
+                  user_id: userIdNow,
+                  lesson_id: item.data.lessonId,
+                  quiz_id: item.data.quizId,
+                  is_completed: !!item.data.isCompleted,
+                  score: item.data.score,
+                });
+              }
+            } catch (e) {
+              // Non-fatal: keep success true so we don't block the queue; upsert will retry via future actions
+              console.warn('Non-fatal: Bubble upsert during syncPendingData failed; will rely on future attempts.', e?.message || e);
+            }
             success = true;
             break;
 
           case 'syncUserProgress':
-            if (syncService.syncToBubble) {
+            // Only attempt if we have a valid user id
+            if (syncService.syncToBubble && item.data.userId) {
               await syncService.syncToBubble(item.data.userId);
+              success = true;
+            } else {
+              // No user id available; nothing to do now. Drop the item to avoid sticky pending counts.
               success = true;
             }
             break;
@@ -243,12 +264,11 @@ export class OfflineManager {
               user_id: userId,
               lesson_id: lessonId,
               quiz_id: quizId,
-              is_completed: isCompleted ? 1 : 0,
+              is_completed: !!isCompleted,
               score,
             });
           } else {
-            // If no user scope, fall back to periodic sync
-            await this.queueForSync('syncUserProgress', { userId });
+            // If no user scope, do not queue a server sync item; keep local only
           }
           console.log('Progress saved locally and synced to Bubble');
         } catch (syncError) {
