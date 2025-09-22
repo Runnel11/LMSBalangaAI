@@ -6,7 +6,8 @@ import {
   insertJobFromBubble,
   insertLessonFromBubble,
   insertLevelFromBubble,
-  insertQuizFromBubble
+  insertQuizFromBubble,
+  saveProgress
 } from '../db/index';
 import { bubbleApi } from './bubbleApi';
 import { networkService } from './networkService';
@@ -111,6 +112,31 @@ export class SyncService {
       console.log('User progress synced to Bubble');
     } catch (error) {
       console.error('Failed to sync progress to Bubble:', error);
+    }
+  }
+
+  // Pull user progress from Bubble into local DB
+  async syncUserProgressFromBubble(userId) {
+    if (!this.isOnline || !userId) {
+      return;
+    }
+    try {
+      const serverProgress = await bubbleApi.getUserProgress(userId);
+      if (!Array.isArray(serverProgress)) return;
+
+      for (const row of serverProgress) {
+        // Normalize references: accept either object refs or ids
+        const lessonId = row.lesson?._id || row.lesson || row.lesson_id || null;
+        const quizId = row.quiz?._id || row.quiz || row.quiz_id || null;
+        const isCompleted = typeof row.is_completed === 'boolean' ? row.is_completed : !!row.is_completed;
+        const score = row.score ?? null;
+        if (lessonId) {
+          await saveProgress(String(lessonId), quizId ? String(quizId) : null, score, isCompleted);
+        }
+      }
+      console.log(`Pulled ${serverProgress.length} progress rows from Bubble`);
+    } catch (error) {
+      console.error('Error syncing user progress from Bubble:', error);
     }
   }
 
@@ -241,6 +267,10 @@ export class SyncService {
       if (this.isOnline) {
         await this.syncFromBubble();
         if (userId) {
+          // Pull latest user progress before pushing local changes
+          await this.syncUserProgressFromBubble(userId);
+        }
+        if (userId) {
           await this.syncToBubble(userId);
         }
       }
@@ -259,6 +289,9 @@ export class SyncService {
     await this.checkConnection();
     if (this.isOnline) {
       await this.syncFromBubble();
+      if (userId) {
+        await this.syncUserProgressFromBubble(userId);
+      }
       if (userId) {
         await this.syncToBubble(userId);
       }

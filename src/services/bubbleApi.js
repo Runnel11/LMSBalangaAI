@@ -103,26 +103,9 @@ export class BubbleApiService {
     return all;
   }
 
-  // Inspect user_progress to determine actual field names used for lesson and quiz references
-  async getUserProgressFieldMap() {
-    if (this._userProgressFieldMap) return this._userProgressFieldMap;
-    try {
-      const { results } = await this.listObjects('user_progress', { limit: 1 });
-      const sample = (Array.isArray(results) && results.length > 0) ? results[0] : {};
-      const keys = Object.keys(sample || {});
-      // Prefer explicit names; fallback to any key that starts with 'lesson' or 'quiz'
-      const lessonKey = ['lesson_id', 'lesson'].find(k => keys.includes(k)) || keys.find(k => k.startsWith('lesson')) || null;
-      const quizKey = ['quiz_id', 'quiz'].find(k => keys.includes(k)) || keys.find(k => k.startsWith('quiz')) || null;
-  // Detect list-ness via sample value or key naming heuristics
-  const lessonIsList = Array.isArray(lessonKey ? sample[lessonKey] : undefined) || /lessons?$|_list$/i.test(String(lessonKey || ''));
-  const quizIsList = Array.isArray(quizKey ? sample[quizKey] : undefined) || /quizzes$|quizzes?_custom|_list$/i.test(String(quizKey || ''));
-      this._userProgressFieldMap = { lessonKey, quizKey, lessonIsList, quizIsList };
-      return this._userProgressFieldMap;
-    } catch (e) {
-      // If we can't detect, default to commonly used names
-      this._userProgressFieldMap = { lessonKey: 'lesson_id', quizKey: 'quiz_id', lessonIsList: false, quizIsList: false };
-      return this._userProgressFieldMap;
-    }
+  // No auto-detection: standardize to Bubble field keys 'user', 'lesson', 'quiz'
+  getUserProgressFieldMap() {
+    return { lessonKey: 'lesson', quizKey: 'quiz', lessonIsList: false, quizIsList: false };
   }
 
   async listLevels(since) {
@@ -161,17 +144,16 @@ export class BubbleApiService {
 
   // Upsert progress using Data API with idempotency by composite key
   async upsertProgress(progress) {
-    const { user_id, lesson_id = null, quiz_id = null } = progress;
+    // Map incoming fields to Bubble keys: user, lesson, quiz
+    const userVal = String(progress.user ?? progress.user_id ?? '');
+    const lessonVal = progress.lesson != null ? String(progress.lesson) : (progress.lesson_id != null ? String(progress.lesson_id) : null);
+    const quizVal = progress.quiz != null ? String(progress.quiz) : (progress.quiz_id != null ? String(progress.quiz_id) : null);
     try {
-      const { lessonKey, quizKey, lessonIsList, quizIsList } = await this.getUserProgressFieldMap();
+      const { lessonKey, quizKey } = this.getUserProgressFieldMap();
       // 1) Try find existing progress for user/lesson/quiz
-      const constraintParts = [ { key: 'user_id', constraint_type: 'equals', value: user_id } ];
-      if (lesson_id && lessonKey && !lessonIsList) {
-        constraintParts.push({ key: lessonKey, constraint_type: 'equals', value: lesson_id });
-      }
-      if (quiz_id && quizKey && !quizIsList) {
-        constraintParts.push({ key: quizKey, constraint_type: 'equals', value: quiz_id });
-      }
+      const constraintParts = [ { key: 'user', constraint_type: 'equals', value: userVal } ];
+      if (lessonVal && lessonKey) constraintParts.push({ key: lessonKey, constraint_type: 'equals', value: lessonVal });
+      if (quizVal && quizKey) constraintParts.push({ key: quizKey, constraint_type: 'equals', value: quizVal });
 
       const existing = await this.listAllObjects('user_progress', {
         extraConstraints: constraintParts,
@@ -179,23 +161,17 @@ export class BubbleApiService {
 
       // Normalize payload to match Bubble field types
       const payload = {
-        user_id,
+        user: userVal,
         is_completed: typeof progress.is_completed === 'boolean' ? progress.is_completed : !!progress.is_completed,
         score: progress.score ?? null,
         completed_at: progress.completed_at ?? new Date().toISOString(),
       };
-  if (lesson_id && lessonKey) payload[lessonKey] = lessonIsList ? [lesson_id] : lesson_id;
-  if (quiz_id && quizKey) payload[quizKey] = quizIsList ? [quiz_id] : quiz_id;
+      if (lessonVal && lessonKey) payload[lessonKey] = lessonVal;
+      if (quizVal && quizKey) payload[quizKey] = quizVal;
 
       if (existing && existing.length > 0) {
         const existingRow = existing[0] || {};
         const id = existingRow._id || existingRow.id;
-        // If quiz field is a list, merge to avoid overwriting previous entries
-        if (quiz_id && quizKey && quizIsList) {
-          const current = Array.isArray(existingRow[quizKey]) ? existingRow[quizKey] : [];
-          const merged = Array.from(new Set([...current, quiz_id]));
-          payload[quizKey] = merged;
-        }
         const res = await fetch(`${this.baseUrl}/obj/user_progress/${id}`, {
           method: 'PATCH',
           headers: this.headers,
@@ -531,26 +507,16 @@ export class BubbleApiService {
 
   async getUserProgress(userId) {
     try {
-      const response = await fetch(`${this.baseUrl}/obj/user_progress`, {
-        method: 'GET',
-        headers: {
-          ...this.headers,
-          'Constraints': JSON.stringify([
-            {
-              key: 'user_id',
-              constraint_type: 'equals',
-              value: userId
-            }
-          ])
-        }
-      });
+      const constraints = [{ key: 'user', constraint_type: 'equals', value: String(userId) }];
+      const url = this.buildUrl('/obj/user_progress', { constraints });
+      const response = await this.request(url.replace(this.baseUrl, ''), { method: 'GET' }, { useUserToken: false });
 
       if (!response.ok) {
         throw new Error('Failed to fetch user progress');
       }
 
       const data = await response.json();
-      return data.response.results;
+      return data.response?.results || [];
     } catch (error) {
       console.error('Error fetching user progress:', error);
       return [];
