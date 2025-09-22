@@ -57,11 +57,11 @@ export const AuthProvider = ({ children }) => {
     checkStoredAuth();
   }, []);
 
-  // Start sync service when user is authenticated
+  // Start sync service when user is authenticated (token optional for offline-first)
   useEffect(() => {
-    if (isAuthenticated && user && authToken) {
-      // Update Bubble API with the auth token
-      bubbleApi.setAuthToken(authToken);
+    if (isAuthenticated && user) {
+      // Update Bubble API with the auth token if available (used for workflows)
+      if (authToken) bubbleApi.setAuthToken(authToken);
       syncService.startPeriodicSync(user.id || user._id);
       // Force initial sync
       syncService.forceSync(user.id || user._id);

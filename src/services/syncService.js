@@ -11,6 +11,7 @@ import {
 } from '../db/index';
 import { bubbleApi } from './bubbleApi';
 import { networkService } from './networkService';
+import { offlineManager } from './offlineManager';
 
 export class SyncService {
   constructor() {
@@ -135,6 +136,11 @@ export class SyncService {
         }
       }
       console.log(`Pulled ${serverProgress.length} progress rows from Bubble`);
+      // Refresh cached offline data so UI can reflect latest immediately
+      try {
+        // cacheEssentialData will notify subscribers via offlineManager
+        await offlineManager.cacheEssentialData?.();
+      } catch {}
     } catch (error) {
       console.error('Error syncing user progress from Bubble:', error);
     }

@@ -22,6 +22,7 @@ export class OfflineManager {
       syncOnCellular: false,
       maxStorageSize: 500 * 1024 * 1024, // 500MB
     };
+    this.subscribers = new Set();
   }
 
   // Initialize offline manager
@@ -106,6 +107,9 @@ export class OfflineManager {
 
       this.offlineData = data;
       await AsyncStorage.setItem(OFFLINE_DATA_KEY, JSON.stringify(data));
+
+  // Notify subscribers so UI can update immediately
+  this.notifySubscribers();
 
       console.log(`✅ Cached ${data.levels.length} levels and ${Object.keys(data.lessons).length} lesson groups`);
       return true;
@@ -363,6 +367,7 @@ export class OfflineManager {
       this.offlineData = null;
       this.pendingSyncData = [];
       console.log('Offline data cleared');
+      this.notifySubscribers();
     } catch (error) {
       console.error('Error clearing offline data:', error);
     }
@@ -371,6 +376,25 @@ export class OfflineManager {
   // Cleanup
   cleanup() {
     networkService.cleanup();
+  }
+
+  // Subscribe to cache updates (UI can refresh immediately)
+  subscribe(callback) {
+    if (typeof callback === 'function') {
+      this.subscribers.add(callback);
+      return () => this.subscribers.delete(callback);
+    }
+    return () => {};
+  }
+
+  notifySubscribers() {
+    for (const cb of this.subscribers) {
+      try {
+        cb(this.offlineData);
+      } catch (e) {
+        console.error('Error in offlineManager subscriber:', e);
+      }
+    }
   }
 }
 
