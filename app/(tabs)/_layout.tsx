@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import React, { useEffect } from 'react';
-import { router } from 'expo-router';
+import { router, usePathname } from 'expo-router';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -9,12 +9,16 @@ import { useAuth } from '@/src/contexts/AuthContext';
 
 export default function TabLayout() {
   const { isAuthenticated, isLoading } = useAuth();
+  const pathname = usePathname();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    // Only redirect to login if we're not already on an auth page
+    // This prevents the login screen from being remounted when login fails
+    if (!isLoading && !isAuthenticated && !pathname.startsWith('/auth/')) {
+      console.log('🔄 Redirecting to login from tabs layout');
       router.replace('/auth/login');
     }
-  }, [isAuthenticated, isLoading]);
+  }, [isAuthenticated, isLoading, pathname]);
 
   if (isLoading || !isAuthenticated) {
     return null; // Or return a loading screen

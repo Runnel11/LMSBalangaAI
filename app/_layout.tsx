@@ -21,10 +21,12 @@ import 'react-native-reanimated';
 import '../global.css';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { ErrorBoundary } from '@/src/components/ui/ErrorBoundary';
 import { LoadingScreen } from '@/src/components/ui/LoadingScreen';
 import { AuthProvider } from '@/src/contexts/AuthContext';
 import { OfflineProvider } from '@/src/contexts/OfflineContext';
 import { initDB } from '@/src/db/index';
+import { logger } from '@/src/utils/logger';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -44,7 +46,20 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    initDB();
+    // Log app startup
+    logger.general.appStart('1.0.0');
+
+    // Initialize database
+    const initTimer = logger.startTimer('DB initialization');
+    initDB()
+      .then(() => {
+        initTimer();
+        logger.db.initialized();
+      })
+      .catch((error) => {
+        initTimer();
+        logger.db.error('initialization', error.message);
+      });
   }, []);
 
   if (!fontsLoaded) {
@@ -52,26 +67,28 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <OfflineProvider>
-        <AuthProvider>
-          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-            <Stack>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="auth/login" options={{ headerShown: false }} />
-              <Stack.Screen name="auth/signup" options={{ headerShown: false }} />
-              <Stack.Screen name="course/[levelId]" options={{ headerShown: false }} />
-              <Stack.Screen name="lesson/[lessonId]" options={{ headerShown: false }} />
-              <Stack.Screen name="quiz/[quizId]" options={{ headerShown: false }} />
-              <Stack.Screen name="jobs" options={{ headerShown: false }} />
-              <Stack.Screen name="community" options={{ headerShown: false }} />
-              <Stack.Screen name="profile" options={{ headerShown: false }} />
-              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-            </Stack>
-            <StatusBar style="auto" />
-          </ThemeProvider>
-        </AuthProvider>
-      </OfflineProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <OfflineProvider>
+          <AuthProvider>
+            <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+              <Stack>
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="auth/login" options={{ headerShown: false }} />
+                <Stack.Screen name="auth/signup" options={{ headerShown: false }} />
+                <Stack.Screen name="course/[levelId]" options={{ headerShown: false }} />
+                <Stack.Screen name="lesson/[lessonId]" options={{ headerShown: false }} />
+                <Stack.Screen name="quiz/[quizId]" options={{ headerShown: false }} />
+                <Stack.Screen name="jobs" options={{ headerShown: false }} />
+                <Stack.Screen name="community" options={{ headerShown: false }} />
+                <Stack.Screen name="profile" options={{ headerShown: false }} />
+                <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+              </Stack>
+              <StatusBar style="auto" />
+            </ThemeProvider>
+          </AuthProvider>
+        </OfflineProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }

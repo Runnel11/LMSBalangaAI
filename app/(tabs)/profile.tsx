@@ -10,6 +10,7 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { getAllLevels, getCompletedLessonsCount, getLevelProgress } from '@/src/db/index';
 import { clearAllDownloads, getDownloadedLessonsSize as getDownloadSize } from '@/src/services/downloadManager';
 import { useFocusEffect } from '@react-navigation/native';
+import { logger } from '@/src/utils/logger';
 
 interface UserStats {
   completedLessons: number;
@@ -36,11 +37,16 @@ export default function ProfileScreen() {
   const settingsRotation = React.useRef(new Animated.Value(0)).current;
 
   const loadUserStats = async () => {
+    const timer = logger.startTimer('Load user stats');
     try {
       setLoading(true);
+      logger.db.query('profile', 'Loading user statistics and progress data');
+
       // Always prefer local DB counts for accuracy
       const completedCount = await getCompletedLessonsCount();
       const levels = await getAllLevels();
+
+      logger.db.query('profile', `Completed lessons: ${completedCount}, Levels available: ${levels.length}`);
 
       let totalLessons = 0;
       const levelProgressData = await Promise.all(
@@ -67,7 +73,12 @@ export default function ProfileScreen() {
         downloadedSize: downloadStats.formattedSize,
         downloadedCount: downloadStats.fileCount,
       });
+
+      timer();
+      logger.db.query('profile', `Profile stats loaded: ${completedCount}/${totalLessons} lessons, Level ${currentLevel}, ${downloadStats.fileCount} downloads (${downloadStats.formattedSize})`);
     } catch (error) {
+      timer();
+      logger.db.error('profile_load', `Failed to load user stats: ${error.message}`);
       console.error('Error loading user stats:', error);
     } finally {
       setLoading(false);
@@ -167,7 +178,7 @@ export default function ProfileScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
-        <TopAppBar title="Profile" />
+        <TopAppBar title="Profile" showLogo={true} />
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading profile...</Text>
         </View>
@@ -177,8 +188,9 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <TopAppBar 
-        title="Profile" 
+      <TopAppBar
+        title="Profile"
+        showLogo={true}
         rightComponent={
           <TouchableOpacity
             onPress={handleSettings}

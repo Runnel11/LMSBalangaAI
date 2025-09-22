@@ -7,6 +7,7 @@ import { Button } from '@/src/components/ui/Button';
 import { TopAppBar } from '@/src/components/ui/TopAppBar';
 import { borderRadius, colors, spacing, typography } from '@/src/config/theme';
 import { getLessonById, getProgress, getQuizByLessonId, saveProgress } from '@/src/db/index';
+import { logger } from '@/src/utils/logger';
 // CommonJS module, prefer require to avoid TS named export issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const downloadManager = require('@/src/services/downloadManager');
@@ -26,23 +27,32 @@ export default function LessonScreen() {
   const [downloading, setDownloading] = useState(false);
 
   const loadLessonData = async () => {
+    const timer = logger.startTimer('Load lesson data');
     try {
       setLoading(true);
       const idStr = String(lessonId);
+      logger.db.query('lesson', `Loading lesson data for lesson ID: ${idStr}`);
+
       const lessonData = await getLessonById(idStr);
       const quizData = await getQuizByLessonId(idStr);
       const progressData: any[] = await getProgress(idStr as any);
 
       setLesson(lessonData as Lesson);
       setQuiz((quizData as any) as Quiz);
-      setIsCompleted(Array.isArray(progressData) && progressData.length > 0 && !!progressData[0].is_completed);
+
+      const completionStatus = Array.isArray(progressData) && progressData.length > 0 && !!progressData[0].is_completed;
+      setIsCompleted(completionStatus);
+
+      logger.db.query('lesson', `Lesson loaded: ${lessonData?.title || 'Unknown'}, Quiz: ${quizData ? 'Available' : 'None'}, Completed: ${completionStatus}`);
 
       // Try local content first, then fallback to lesson.content
       let content: LessonContent = null;
       if ((lessonData as any)?.is_downloaded) {
+        logger.db.query('lesson', 'Attempting to load local content');
         content = await downloadManager.getLocalLessonContent(lessonData);
       }
       if (!content && lessonData) {
+        logger.db.query('lesson', 'Using embedded content or showing download prompt');
         content = {
           id: (lessonData as any).id,
           title: (lessonData as any).title,
@@ -51,7 +61,10 @@ export default function LessonScreen() {
         };
       }
       setLessonContent(content);
+      timer();
     } catch (error) {
+      timer();
+      logger.db.error('lesson_load', `Failed to load lesson ${lessonId}: ${error.message}`);
       console.error('Error loading lesson data:', error);
       Alert.alert('Error', 'Failed to load lesson data.');
     } finally {
@@ -93,11 +106,17 @@ export default function LessonScreen() {
 
   const handleMarkComplete = async () => {
     if (!lesson) return;
+    const timer = logger.startTimer('Mark lesson complete');
     try {
+      logger.db.query('progress', `Marking lesson ${lesson.id} as complete`);
       await saveProgress((lesson as any).id, null, null, true);
       setIsCompleted(true);
+      timer();
+      logger.db.query('progress', `Successfully marked lesson ${lesson.id} as complete`);
       Alert.alert('Completed', 'Lesson marked as complete!');
     } catch (error) {
+      timer();
+      logger.db.error('progress_save', `Failed to mark lesson ${lesson.id} complete: ${error.message}`);
       console.error('Error marking lesson complete:', error);
       Alert.alert('Error', 'Failed to mark lesson as complete.');
     }

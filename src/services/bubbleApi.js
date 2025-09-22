@@ -292,6 +292,31 @@ export class BubbleApiService {
     }
   }
 
+  // Validate if a stored token is still valid
+  async validateToken(token) {
+    try {
+      // Use a simple endpoint to test token validity
+      const response = await fetch(`${this.baseUrl}/wf/validate-token`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ token })
+      });
+
+      if (!response.ok) {
+        return false;
+      }
+
+      const data = await response.json();
+      return data.response === 'success' && data.valid === true;
+    } catch (error) {
+      console.error('Token validation error:', error);
+      return false; // Assume invalid on error
+    }
+  }
+
   async createUser(userData) {
     try {
       // Call your Bubble signup endpoint that creates user and returns token
@@ -335,7 +360,7 @@ export class BubbleApiService {
           };
         }
       } else {
-        throw new Error('User creation failed');
+        throw new Error('An account with this email already exists.');
       }
     } catch (error) {
       console.error('Bubble user creation error:', error);

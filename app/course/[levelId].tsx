@@ -15,6 +15,7 @@ import {
   getLevelProgress,
   getProgress
 } from '@/src/db/index';
+import { logger } from '@/src/utils/logger';
 import type { TextStyle, ViewStyle } from 'react-native';
 // CommonJS module, prefer require to avoid TS named export issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -47,10 +48,14 @@ export default function CourseLevelScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const loadLevelData = async () => {
+    const timer = logger.startTimer('Load level data');
     try {
-  const levelData = await getLevelById(String(levelId));
-  const lessonsData = await getLessonsByLevel(String(levelId));
-  const progress = await getLevelProgress(String(levelId));
+      logger.db.query('level', `Loading level data for level ID: ${levelId}`);
+      const levelData = await getLevelById(String(levelId));
+      const lessonsData = await getLessonsByLevel(String(levelId));
+      const progress = await getLevelProgress(String(levelId));
+
+      logger.db.query('level', `Loaded level: ${levelData?.title || 'Unknown'}, ${lessonsData.length} lessons, ${progress.percentage}% complete`);
       
       const lessonsWithProgressData: LessonWithProgress[] = await Promise.all(
         (lessonsData as Lesson[]).map(async (lesson: Lesson) => {
@@ -67,7 +72,11 @@ export default function CourseLevelScreen() {
       setLessons(lessonsData);
       setLessonsWithProgress(lessonsWithProgressData);
       setLevelProgress(progress);
+      timer();
+      logger.db.query('level', `Successfully loaded level data with ${lessonsWithProgressData.length} lessons`);
     } catch (error) {
+      timer();
+      logger.db.error('level_load', `Failed to load level ${levelId}: ${error.message}`);
       console.error('Error loading level data:', error);
     }
   };

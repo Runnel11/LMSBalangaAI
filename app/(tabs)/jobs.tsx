@@ -97,7 +97,7 @@ export default function JobsScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container as ViewStyle} edges={['bottom']}>
-        <TopAppBar title="Job Board" />
+        <TopAppBar title="Job Board" showLogo={true} />
         <View style={styles.loadingContainer as ViewStyle}>
           <Text style={styles.loadingText as TextStyle}>Loading jobs...</Text>
         </View>
@@ -107,7 +107,7 @@ export default function JobsScreen() {
 
   return (
     <SafeAreaView style={styles.container as ViewStyle} edges={['bottom']}>
-      <TopAppBar title="Job Board" />
+      <TopAppBar title="Job Board" showLogo={true} />
       
       <ScrollView
         style={styles.content as ViewStyle}

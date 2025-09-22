@@ -9,6 +9,7 @@ import { ProgressBar } from '@/src/components/ui/ProgressBar';
 import { getLessonById, saveProgress, getProgress, getQuizByLessonId } from '@/src/db/index';
 import { Platform } from 'react-native';
 import { colors, typography, spacing, borderRadius } from '@/src/config/theme';
+import { logger } from '@/src/utils/logger';
 
 interface Question {
   question: string;
@@ -34,9 +35,11 @@ export default function QuizScreen() {
   const [loading, setLoading] = useState(true);
 
   const loadQuizData = async () => {
+    const timer = logger.startTimer('Load quiz data');
     try {
       setLoading(true);
-      
+      logger.db.query('quiz', `Loading quiz data for quiz ID: ${quizId}`);
+
       // Use the unified database interface
       const quizData = await getQuizByLessonId(Number(quizId));
       
@@ -52,8 +55,16 @@ export default function QuizScreen() {
         });
         setLesson(lessonData);
         setSelectedAnswers(new Array(parsedQuestions.length).fill(-1));
+
+        timer();
+        logger.db.query('quiz', `Quiz loaded: ${quizData.title || 'Unknown'}, ${parsedQuestions.length} questions, Lesson: ${lessonData?.title || 'Unknown'}`);
+      } else {
+        timer();
+        logger.db.error('quiz_load', `Quiz not found for ID: ${quizId}`);
       }
     } catch (error) {
+      timer();
+      logger.db.error('quiz_load', `Failed to load quiz ${quizId}: ${error.message}`);
       console.error('Error loading quiz data:', error);
       Alert.alert('Error', 'Failed to load quiz data.');
     } finally {
@@ -90,6 +101,7 @@ export default function QuizScreen() {
   const handleSubmitQuiz = async () => {
     if (!quiz) return;
 
+    const timer = logger.startTimer('Submit quiz');
     let correctAnswers = 0;
     quiz.questions.forEach((question, index) => {
       if (selectedAnswers[index] === question.correct) {
@@ -101,14 +113,22 @@ export default function QuizScreen() {
     setScore(finalScore);
     setShowResults(true);
 
+    logger.db.query('quiz', `Quiz completed: ${correctAnswers}/${quiz.questions.length} correct (${finalScore}%)`);
+
     try {
       await saveProgress(quiz.lesson_id, quiz.id, finalScore, true);
+      timer();
+      logger.db.query('progress', `Successfully saved quiz progress: Lesson ${quiz.lesson_id}, Quiz ${quiz.id}, Score ${finalScore}%`);
     } catch (error) {
+      timer();
+      logger.db.error('progress_save', `Failed to save quiz progress: ${error.message}`);
       console.error('Error saving quiz progress:', error);
+      Alert.alert('Warning', 'Quiz completed but progress could not be saved.');
     }
   };
 
   const handleRetakeQuiz = () => {
+    logger.db.query('quiz', `Retaking quiz: ${quiz?.title || 'Unknown'}`);
     setCurrentQuestionIndex(0);
     setSelectedAnswers(new Array(quiz?.questions.length || 0).fill(-1));
     setShowResults(false);

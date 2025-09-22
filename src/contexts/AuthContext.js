@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { repairProgressData, setCurrentUserId } from '../db/index';
 import { bubbleApi } from '../services/bubbleApi';
 import { syncService } from '../services/syncService';
+import { logger } from '../utils/logger';
 
 // Secure storage - will use different implementations for web vs mobile
 let secureStore;
@@ -74,27 +75,46 @@ export const AuthProvider = ({ children }) => {
   }, [isAuthenticated, user, authToken]);
 
   const checkStoredAuth = async () => {
+    const timer = logger.startTimer('Auth check stored');
     try {
+      logger.auth.loginAttempt('stored_session');
       const token = await secureStore.getItemAsync('auth_token');
       const userData = await secureStore.getItemAsync('user_data');
 
       if (token && userData) {
         const parsedUser = JSON.parse(userData);
 
+        // Validate token is still valid
+        const isValidToken = await bubbleApi.validateToken(token);
+        if (!isValidToken) {
+          logger.auth.loginFailure('Token expired', 'token_expired');
+          await clearStoredAuth();
+          timer();
+          return;
+        }
+
         // Set auth token for API calls
         setAuthToken(token);
         setUser(parsedUser);
         setIsAuthenticated(true);
+
         // Scope DB operations to this user
-  const uid = parsedUser.id || parsedUser._id || 1;
-  setCurrentUserId(uid);
-  // Attempt to repair any legacy progress rows
-  repairProgressData();
+        const uid = parsedUser.id || parsedUser._id || 1;
+        setCurrentUserId(uid);
+
+        // Attempt to repair any legacy progress rows
+        try {
+          await repairProgressData();
+          logger.auth.loginSuccess(uid);
+        } catch (repairError) {
+          logger.db.error('progress_repair', repairError.message);
+        }
       }
     } catch (error) {
-      console.error('Error checking stored auth:', error);
+      logger.auth.loginFailure(error.message, 'stored_auth_error');
       await clearStoredAuth();
     } finally {
+      timer();
       setIsLoading(false);
     }
   };
@@ -105,8 +125,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = async (email, password) => {
+    const timer = logger.startTimer('Login attempt');
     try {
       setIsLoading(true);
+      logger.auth.loginAttempt(email);
 
       // Authenticate with Bubble using token-based auth
       const result = await bubbleApi.authenticateUser(email, password);

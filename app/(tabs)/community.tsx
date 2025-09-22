@@ -228,7 +228,7 @@ export default function CommunityScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <TopAppBar title="Community Hub" />
+      <TopAppBar title="Community Hub" showLogo={true} />
       
       <View style={styles.tabsContainer}>
         <TouchableOpacity

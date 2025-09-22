@@ -3,6 +3,7 @@ import { colors, spacing, typography } from '@/src/config/theme';
 import React from 'react';
 import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Logo } from '@/src/components/ui/Logo';
 
 interface TopAppBarProps {
   title: string;
@@ -10,6 +11,7 @@ interface TopAppBarProps {
   onBackPress?: () => void;
   rightComponent?: React.ReactNode;
   backgroundColor?: string;
+  showLogo?: boolean;
 }
 
 export const TopAppBar: React.FC<TopAppBarProps> = ({
@@ -18,6 +20,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
   onBackPress,
   rightComponent,
   backgroundColor = colors.background,
+  showLogo = false,
 }) => {
   return (
     <>
@@ -36,8 +39,11 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                 <Text>Back</Text>
               </TouchableOpacity>
             )}
+            {showLogo && !showBackButton && (
+              <Logo size="small" showText={false} variant="icon-only" />
+            )}
           </View>
-          
+
           <View style={styles.titleSection}>
             <Text style={styles.title} numberOfLines={1}>
               {title}

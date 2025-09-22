@@ -10,6 +10,7 @@ import { TopAppBar } from '@/src/components/ui/TopAppBar';
 import { colors, spacing, typography } from '@/src/config/theme';
 import { useOffline } from '@/src/contexts/OfflineContext';
 import { getAllLevels, getLevelProgress } from '@/src/db/index';
+import { logger } from '@/src/utils/logger';
 
 export default function HomeScreen() {
   type LevelItem = {
@@ -26,21 +27,30 @@ export default function HomeScreen() {
   const [levels, setLevels] = useState<LevelItem[]>([]);
   const [levelsWithProgress, setLevelsWithProgress] = useState<LevelItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { isOnline, offlineData, refreshOfflineData } = useOffline();
 
   const loadLevelsWithProgress = async () => {
+    const timer = logger.startTimer('Load levels with progress');
     try {
-  let levelsData: any[];
+      setError(null);
+      setLoading(true);
+      logger.db.query('levels', 'Loading levels with progress calculations');
+      let levelsData: any[];
 
       // Try to load from local database first
       try {
-  levelsData = await getAllLevels();
+        levelsData = await getAllLevels();
+        logger.db.query('levels', `Loaded ${levelsData.length} levels from local database`);
       } catch (dbError) {
+        logger.db.error('levels_load', `Local database failed: ${dbError.message}`);
         console.warn('Could not load from local database, trying offline cache:', dbError);
 
         // Fallback to offline cached data
         if (offlineData?.levels) {
           levelsData = offlineData.levels as any[];
+          logger.db.query('levels', `Loaded ${levelsData.length} levels from offline cache`);
         } else {
           throw new Error('No data available offline');
         }
@@ -56,6 +66,7 @@ export default function HomeScreen() {
         normalizedLevels.map(async (level: LevelItem) => {
           try {
             const progress = await getLevelProgress(level.id);
+            logger.db.query('progress', `Level ${level.id}: ${progress.completed}/${progress.total} lessons (${progress.percentage}%)`);
             return {
               ...level,
               progress: progress.percentage,
@@ -63,6 +74,7 @@ export default function HomeScreen() {
               completedLessons: progress.completed,
             };
           } catch (progressError) {
+            logger.db.error('progress_calc', `Failed to load progress for level ${level.id}: ${progressError.message}`);
             console.warn(`Could not load progress for level ${level.id}:`, progressError);
             return {
               ...level,
@@ -73,13 +85,21 @@ export default function HomeScreen() {
           }
         })
       );
+
       setLevels(normalizedLevels);
       setLevelsWithProgress(levelsWithProgressData);
+      timer();
+      logger.db.query('levels', `Successfully loaded ${levelsWithProgressData.length} levels with progress calculations`);
     } catch (error) {
+      timer();
+      logger.db.error('levels_load', `Complete failure loading levels: ${error.message}`);
       console.error('Error loading levels:', error);
+      setError(`Failed to load courses: ${error.message}`);
       // Set empty state if all loading methods fail
       setLevels([]);
       setLevelsWithProgress([]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -112,7 +132,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <TopAppBar title="BalangaAI Academy" />
+      <TopAppBar title="BalangaAI Academy" showLogo={true} />
       <OfflineIndicator />
 
       <ScrollView
@@ -130,8 +150,32 @@ export default function HomeScreen() {
 
         <View style={styles.coursesSection}>
           <Text style={styles.sectionTitle}>Your Courses</Text>
-          
-          {levelsWithProgress.map((level) => (
+
+          {loading && (
+            <View style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>Loading courses...</Text>
+            </View>
+          )}
+
+          {error && (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+              <Text style={styles.retryText} onPress={loadLevelsWithProgress}>
+                Tap to retry
+              </Text>
+            </View>
+          )}
+
+          {!loading && !error && levelsWithProgress.length === 0 && (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No courses available</Text>
+              <Text style={styles.emptySubtext}>
+                {isOnline ? 'Courses will appear here once content is available' : 'Connect to the internet to load courses'}
+              </Text>
+            </View>
+          )}
+
+          {!loading && !error && levelsWithProgress.map((level) => (
             <CourseCard
               key={String(level.id ?? level._id)}
               title={level.title}
@@ -179,5 +223,47 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
+  },
+  loadingContainer: {
+    padding: spacing.xl,
+    alignItems: 'center',
+  },
+  loadingText: {
+    ...typography.body1,
+    color: colors.textSecondary,
+  },
+  errorContainer: {
+    padding: spacing.xl,
+    alignItems: 'center',
+    marginHorizontal: spacing.lg,
+    backgroundColor: colors.error + '10',
+    borderRadius: 8,
+    marginBottom: spacing.md,
+  },
+  errorText: {
+    ...typography.body1,
+    color: colors.error,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  retryText: {
+    ...typography.body2,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  emptyContainer: {
+    padding: spacing.xl,
+    alignItems: 'center',
+    marginHorizontal: spacing.lg,
+  },
+  emptyText: {
+    ...typography.h3,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  emptySubtext: {
+    ...typography.body2,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
 });

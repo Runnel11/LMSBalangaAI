@@ -19,8 +19,8 @@ export const mvpSections: MvpSection[] = [
     title: 'Critical stability and startup',
     priority: 'P0',
     items: [
-      { id: 'boot-routing', title: 'App boot & routing stability', status: 'in-progress' },
-      { id: 'error-boundary', title: 'Error boundary & crash visibility', status: 'todo' },
+      { id: 'boot-routing', title: 'App boot & routing stability', status: 'done' },
+      { id: 'error-boundary', title: 'Error boundary & crash visibility', status: 'done' },
     ],
   },
   {
@@ -28,12 +28,12 @@ export const mvpSections: MvpSection[] = [
     title: 'Core learning flow (MVP)',
     priority: 'P1',
     items: [
-      { id: 'auth', title: 'Authentication (login/signup/logout)', status: 'in-progress' },
+      { id: 'auth', title: 'Authentication (login/signup/logout)', status: 'done' },
       { id: 'content-model', title: 'Content model (levels→lessons→quizzes)', status: 'done' },
-      { id: 'courses-progress', title: 'Course listing with progress', status: 'in-progress' },
-      { id: 'lesson-view', title: 'Lesson viewing & completion', status: 'in-progress' },
-      { id: 'quiz-flow', title: 'Quiz flow and scoring', status: 'in-progress' },
-      { id: 'profile', title: 'Profile summary', status: 'in-progress' },
+      { id: 'courses-progress', title: 'Course listing with progress', status: 'done' },
+      { id: 'lesson-view', title: 'Lesson viewing & completion', status: 'done' },
+      { id: 'quiz-flow', title: 'Quiz flow and scoring', status: 'done' },
+      { id: 'profile', title: 'Profile summary', status: 'done' },
     ],
   },
   {

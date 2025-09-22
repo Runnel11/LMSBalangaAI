@@ -1,10 +1,13 @@
+import { Logo } from '@/src/components/ui/Logo';
 import { borderRadius, colors, spacing, typography } from '@/src/config/theme';
 import { useAuth } from '@/src/contexts/AuthContext';
+import { logger } from '@/src/utils/logger';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -19,26 +22,112 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const { login } = useAuth();
 
+  // Animation refs
+  const errorFadeAnim = useRef(new Animated.Value(0)).current;
+  const emailShakeAnim = useRef(new Animated.Value(0)).current;
+  const passwordShakeAnim = useRef(new Animated.Value(0)).current;
+
+  // Animation functions
+  const showErrorAnimation = () => {
+    Animated.sequence([
+      Animated.timing(errorFadeAnim, {
+        toValue: 0,
+        duration: 0,
+        useNativeDriver: true,
+      }),
+      Animated.timing(errorFadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const shakeInput = (animValue) => {
+    Animated.sequence([
+      Animated.timing(animValue, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(animValue, { toValue: -10, duration: 50, useNativeDriver: true }),
+      Animated.timing(animValue, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(animValue, { toValue: 0, duration: 50, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const hideErrorAnimation = () => {
+    Animated.timing(errorFadeAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  // Animate errors when they appear
+  useEffect(() => {
+    if (error || emailError || passwordError) {
+      showErrorAnimation();
+
+      // Shake the inputs that have errors
+      if (emailError) shakeInput(emailShakeAnim);
+      if (passwordError) shakeInput(passwordShakeAnim);
+    }
+  }, [error, emailError, passwordError]);
+
+  const validateForm = () => {
+    let isValid = true;
+    setError('');
+    setEmailError('');
+    setPasswordError('');
+
+    if (!email.trim()) {
+      setEmailError('Email is required');
+      isValid = false;
+    } else if (!/\S+@\S+\.\S+/.test(email.trim())) {
+      setEmailError('Please enter a valid email address');
+      isValid = false;
+    }
+
+    if (!password.trim()) {
+      setPasswordError('Password is required');
+      isValid = false;
+    } else {
+      return isValid;
+    }
+
+    
+  };
+
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Please fill in all fields');
+    if (!validateForm()) {
       return;
     }
 
     setIsLoading(true);
+    setError('');
+
+    console.log('🔐 Login attempt:', { email: email.trim().toLowerCase(), hasPassword: !!password });
     const result = await login(email.trim().toLowerCase(), password);
+    console.log('🔐 Login result:', { success: result.success, errorType: result.errorType, error: result.error });
 
     if (result.success) {
+      console.log('✅ Login successful, navigating to home');
       // Navigation will be handled by the auth context
       router.replace('/(tabs)');
     } else {
-      // Handle specific error types with better UX
+      // Handle specific error types with better UX - show inline errors
       console.log('🔐 Login failed with error type:', result.errorType);
       console.log('🔐 Error message:', result.error);
 
       if (result.errorType === 'account_not_found') {
+        console.log('Account not found - setting error messages');
+        logger.auth.loginFailure('Account not found', 'account_not_found');
+        setError('Invalid email or password. Please check your credentials.');
+        setEmailError('Account not found');
+
+        // Also show alert with option to create account
         Alert.alert(
           'Account Not Found',
           'No account found with this email address. Would you like to create an account?',
@@ -47,7 +136,6 @@ export default function LoginScreen() {
             {
               text: 'Create Account',
               onPress: () => {
-                // Navigate to signup with pre-filled email
                 router.push({
                   pathname: '/auth/signup',
                   params: { email: email.trim().toLowerCase() }
@@ -57,33 +145,57 @@ export default function LoginScreen() {
           ]
         );
       } else {
-        // Handle other error types with appropriate messaging
-        let errorTitle = 'Login Failed';
-        let errorMessage = result.error || 'Please check your credentials';
+        // Handle other error types with inline error messages
+        let errorMessage = result.error || 'Invalid email or password. Please try again.';
 
         switch (result.errorType) {
           case 'network_error':
-            errorTitle = 'Connection Error';
-            errorMessage = 'Please check your internet connection and try again.';
+            errorMessage = 'Connection error. Please check your internet connection.';
             break;
           case 'http_error':
-            errorTitle = 'Server Error';
-            errorMessage = 'Server is temporarily unavailable. Please try again later.';
+            errorMessage = 'Server error. Please try again later.';
             break;
           case 'response_format_error':
-            errorTitle = 'Service Error';
-            errorMessage = 'There was a problem with the service. Please try again.';
+            errorMessage = 'Service error. Please try again.';
+            break;
+          case 'client_error':
+            errorMessage = 'Login failed. Please check your credentials and try again.';
+            break;
+          case 'unexpected_response':
+            errorMessage = 'Invalid email or password. Please check your credentials.';
+            setEmailError('Please verify your email');
+            setPasswordError('Please verify your password');
             break;
           default:
-            // Use the error message from the server for other cases
+            // For unknown errors or invalid credentials
+            if (result.error && (
+              result.error.toLowerCase().includes('credential') ||
+              result.error.toLowerCase().includes('password') ||
+              result.error.toLowerCase().includes('invalid') ||
+              result.error.toLowerCase().includes('authentication failed')
+            )) {
+              errorMessage = 'Invalid email or password. Please check your credentials.';
+              setEmailError('Please check your email');
+              setPasswordError('Please check your password');
+            }
             break;
         }
 
-        Alert.alert(errorTitle, errorMessage);
+        logger.auth.loginFailure(errorMessage, result.errorType || 'unknown');
+        setError(errorMessage);
       }
     }
 
     setIsLoading(false);
+  };
+
+  const clearErrors = () => {
+    hideErrorAnimation();
+    setTimeout(() => {
+      setError('');
+      setEmailError('');
+      setPasswordError('');
+    }, 200);
   };
 
   const navigateToSignup = () => {
@@ -97,36 +209,114 @@ export default function LoginScreen() {
         style={styles.keyboardAvoidingView}
       >
         <View style={styles.content}>
+          <View style={styles.logoContainer}>
+            <Logo size="large" showText={true} />
+          </View>
+
           <View style={styles.header}>
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>Sign in to continue your learning journey</Text>
           </View>
 
           <View style={styles.form}>
+            {/* General error message */}
+            {error ? (
+              <Animated.View
+                style={[
+                  styles.errorContainer,
+                  {
+                    opacity: errorFadeAnim,
+                    transform: [{
+                      translateY: errorFadeAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-10, 0]
+                      })
+                    }]
+                  }
+                ]}
+              >
+                <Text style={styles.errorText}>{error}</Text>
+              </Animated.View>
+            ) : null}
+
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="Enter your email"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!isLoading}
-              />
+              <Animated.View
+                style={{
+                  transform: [{ translateX: emailShakeAnim }]
+                }}
+              >
+                <TextInput
+                  style={[
+                    styles.input,
+                    emailError ? styles.inputError : null
+                  ]}
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    if (emailError || error) clearErrors(); // Clear errors on edit
+                  }}
+                  placeholder="Enter your email"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isLoading}
+                />
+              </Animated.View>
+              {emailError ? (
+                <Animated.View
+                  style={{
+                    opacity: errorFadeAnim,
+                    transform: [{
+                      translateY: errorFadeAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-5, 0]
+                      })
+                    }]
+                  }}
+                >
+                  <Text style={styles.fieldErrorText}>{emailError}</Text>
+                </Animated.View>
+              ) : null}
             </View>
 
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Enter your password"
-                secureTextEntry
-                editable={!isLoading}
-              />
+              <Animated.View
+                style={{
+                  transform: [{ translateX: passwordShakeAnim }]
+                }}
+              >
+                <TextInput
+                  style={[
+                    styles.input,
+                    passwordError ? styles.inputError : null
+                  ]}
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    if (passwordError || error) clearErrors(); // Clear errors on edit
+                  }}
+                  placeholder="Enter your password"
+                  secureTextEntry
+                  editable={!isLoading}
+                />
+              </Animated.View>
+              {passwordError ? (
+                <Animated.View
+                  style={{
+                    opacity: errorFadeAnim,
+                    transform: [{
+                      translateY: errorFadeAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-5, 0]
+                      })
+                    }]
+                  }}
+                >
+                  <Text style={styles.fieldErrorText}>{passwordError}</Text>
+                </Animated.View>
+              ) : null}
             </View>
 
             <TouchableOpacity
@@ -166,6 +356,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing.lg,
     justifyContent: 'center',
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: spacing.xl,
   },
   header: {
     alignItems: 'center',
@@ -234,5 +428,28 @@ const styles = StyleSheet.create({
     ...typography.body2,
     color: colors.primary,
     fontWeight: '600',
+  },
+  errorContainer: {
+    backgroundColor: colors.error + '10', // Light red background
+    borderWidth: 1,
+    borderColor: colors.error + '30',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  errorText: {
+    ...typography.body2,
+    color: colors.error,
+    textAlign: 'center',
+  },
+  inputError: {
+    borderColor: colors.error,
+    borderWidth: 2,
+  },
+  fieldErrorText: {
+    ...typography.caption,
+    color: colors.error,
+    marginTop: spacing.xs,
+    marginLeft: spacing.xs,
   },
 });
