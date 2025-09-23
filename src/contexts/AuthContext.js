@@ -27,7 +27,7 @@ if (Platform.OS === 'web') {
   try {
     secureStore = SecureStore;
   } catch (error) {
-    console.warn('Expo SecureStore not available, using AsyncStorage');
+  logger.general.appError('Expo SecureStore not available, using AsyncStorage');
     secureStore = {
       setItemAsync: AsyncStorage.setItem,
       getItemAsync: AsyncStorage.getItem,
@@ -152,7 +152,7 @@ export const AuthProvider = ({ children }) => {
         };
       }
     } catch (error) {
-      console.error('Login error:', error);
+      logger.auth.loginFailure(error.message, 'login_error');
       return {
         success: false,
         error: 'Login failed. Please try again.',
@@ -193,7 +193,7 @@ export const AuthProvider = ({ children }) => {
         };
       }
     } catch (error) {
-      console.error('Signup error:', error);
+      logger.auth.signupFailure(error.message);
       return {
         success: false,
         error: 'Signup failed. Please try again.',
@@ -223,7 +223,7 @@ export const AuthProvider = ({ children }) => {
       // Stop sync service
       syncService.stopPeriodicSync();
     } catch (error) {
-      console.error('Logout error:', error);
+  logger.general.appError('Logout error', String(error));
     } finally {
       setIsLoading(false);
     }

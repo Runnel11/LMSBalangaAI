@@ -1,6 +1,6 @@
+import { borderRadius, colors, spacing, typography } from '@/src/config/theme';
 import React from 'react';
-import { TouchableOpacity, Text, ActivityIndicator, ViewStyle, TextStyle, Animated } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '@/src/config/theme';
+import { ActivityIndicator, Animated, StyleProp, Text, TextStyle, TouchableOpacity, ViewStyle } from 'react-native';
 
 interface ButtonProps {
   title: string;
@@ -10,8 +10,13 @@ interface ButtonProps {
   disabled?: boolean;
   loading?: boolean;
   accessibilityLabel?: string;
-  style?: ViewStyle;
-  textStyle?: TextStyle;
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
+  /**
+   * Controls the base typography of the button label. Use header variants for prominent CTA-as-heading designs.
+   * Default is 'button'.
+   */
+  textVariant?: 'button' | 'h3' | 'h2' | 'h1';
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -24,7 +29,8 @@ export const Button: React.FC<ButtonProps> = ({
   accessibilityLabel,
   style,
   textStyle,
-}) => {
+  textVariant = 'button',
+}: ButtonProps) => {
   const scaleAnim = React.useRef(new Animated.Value(1)).current;
   const opacityAnim = React.useRef(new Animated.Value(1)).current;
 
@@ -68,7 +74,7 @@ export const Button: React.FC<ButtonProps> = ({
       flexDirection: 'row',
     };
 
-    const sizeStyles = {
+    const sizeStyles: Record<'small' | 'medium' | 'large', ViewStyle> = {
       small: { 
         paddingHorizontal: spacing.md, 
         paddingVertical: spacing.sm,
@@ -86,7 +92,7 @@ export const Button: React.FC<ButtonProps> = ({
       },
     };
 
-    const variantStyles = {
+    const variantStyles: Record<'primary' | 'secondary' | 'tertiary' | 'danger', ViewStyle> = {
       primary: {
         backgroundColor: disabled ? colors.disabled : colors.primary,
       },
@@ -113,18 +119,25 @@ export const Button: React.FC<ButtonProps> = ({
   };
 
   const getTextStyle = (): TextStyle => {
+    // Choose the base token depending on requested textVariant
+    const token =
+      textVariant === 'h1' ? (typography.h1 as any) :
+      textVariant === 'h2' ? (typography.h2 as any) :
+      textVariant === 'h3' ? (typography.h3 as any) :
+      (typography.button as any);
+
     const baseStyle: TextStyle = {
-      ...typography.button, // 14px / Manrope Bold / Uppercase
+      ...token,
       textAlign: 'center',
     };
 
-    const sizeStyles = {
+    const sizeStyles: Record<'small' | 'medium' | 'large', TextStyle> = {
       small: { fontSize: 12 },
       medium: { fontSize: 14 }, // Standard button text size
       large: { fontSize: 16 },
     };
 
-    const variantStyles = {
+    const variantStyles: Record<'primary' | 'secondary' | 'tertiary' | 'danger', TextStyle> = {
       primary: {
         color: disabled ? colors.disabledText : colors.surface, // White text on primary
       },

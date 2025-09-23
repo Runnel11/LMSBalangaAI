@@ -69,13 +69,13 @@ export const typography = {
     lineHeight: 16,
     fontFamily: 'Inter-Medium',
   },
-  // Button Text: 14px / Manrope Bold / Uppercase
+  // Button Text: use header-like styling by default (H3 scale)
   button: {
-    fontSize: 14,
-    fontWeight: '700',
-    lineHeight: 18,
-    fontFamily: 'Manrope-Bold',
-    textTransform: 'uppercase',
+    fontSize: 18,
+    fontWeight: '600',
+    lineHeight: 24,
+    fontFamily: 'Manrope-SemiBold',
+    // Keep case as provided; remove forced uppercase for improved readability
   },
 };
 

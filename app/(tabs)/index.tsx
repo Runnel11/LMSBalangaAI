@@ -1,7 +1,7 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CourseCard } from '@/src/components/ui/CourseCard';
@@ -11,6 +11,9 @@ import { colors, spacing, typography } from '@/src/config/theme';
 import { useOffline } from '@/src/contexts/OfflineContext';
 import { getAllLevels, getLevelProgress } from '@/src/db/index';
 import { logger } from '@/src/utils/logger';
+// CommonJS to avoid TS named export issues for platform module
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const downloadManager = require('@/src/services/downloadManager');
 
 export default function HomeScreen() {
   type LevelItem = {
@@ -43,8 +46,8 @@ export default function HomeScreen() {
       try {
         levelsData = await getAllLevels();
         logger.db.query('levels', `Loaded ${levelsData.length} levels from local database`);
-      } catch (dbError) {
-        logger.db.error('levels_load', `Local database failed: ${dbError.message}`);
+      } catch (dbError: any) {
+        logger.db.error('levels_load', `Local database failed: ${dbError?.message ?? String(dbError)}`);
         console.warn('Could not load from local database, trying offline cache:', dbError);
 
         // Fallback to offline cached data
@@ -62,8 +65,25 @@ export default function HomeScreen() {
         id: level?.id ?? level?._id,
       }));
 
+      // If offline, hide levels with no downloaded lessons on this device
+      let levelsForDisplay: LevelItem[] = normalizedLevels;
+      if (!isOnline) {
+        try {
+          const keepFlags = await Promise.all(
+            normalizedLevels.map(async (lvl: LevelItem) => {
+              const items = await downloadManager.getOfflineLessons(String(lvl.id));
+              return Array.isArray(items) && items.length > 0;
+            })
+          );
+          levelsForDisplay = normalizedLevels.filter((_, idx) => keepFlags[idx]);
+          logger.db.query('levels', `Offline filter kept ${levelsForDisplay.length} of ${normalizedLevels.length} levels`);
+        } catch (e: any) {
+          logger.offline.syncError(String(e?.message ?? e));
+        }
+      }
+
       const levelsWithProgressData: LevelItem[] = await Promise.all(
-        normalizedLevels.map(async (level: LevelItem) => {
+        levelsForDisplay.map(async (level: LevelItem) => {
           try {
             const progress = await getLevelProgress(level.id);
             logger.db.query('progress', `Level ${level.id}: ${progress.completed}/${progress.total} lessons (${progress.percentage}%)`);
@@ -73,8 +93,8 @@ export default function HomeScreen() {
               totalLessons: progress.total,
               completedLessons: progress.completed,
             };
-          } catch (progressError) {
-            logger.db.error('progress_calc', `Failed to load progress for level ${level.id}: ${progressError.message}`);
+          } catch (progressError: any) {
+            logger.db.error('progress_calc', `Failed to load progress for level ${level.id}: ${progressError?.message ?? String(progressError)}`);
             console.warn(`Could not load progress for level ${level.id}:`, progressError);
             return {
               ...level,
@@ -86,15 +106,15 @@ export default function HomeScreen() {
         })
       );
 
-      setLevels(normalizedLevels);
+      setLevels(levelsForDisplay);
       setLevelsWithProgress(levelsWithProgressData);
       timer();
       logger.db.query('levels', `Successfully loaded ${levelsWithProgressData.length} levels with progress calculations`);
-    } catch (error) {
+    } catch (error: any) {
       timer();
-      logger.db.error('levels_load', `Complete failure loading levels: ${error.message}`);
+      logger.db.error('levels_load', `Complete failure loading levels: ${error?.message ?? String(error)}`);
       console.error('Error loading levels:', error);
-      setError(`Failed to load courses: ${error.message}`);
+      setError(`Failed to load courses: ${error?.message ?? String(error)}`);
       // Set empty state if all loading methods fail
       setLevels([]);
       setLevelsWithProgress([]);
@@ -106,6 +126,11 @@ export default function HomeScreen() {
   useEffect(() => {
     loadLevelsWithProgress();
   }, []);
+
+  // Reload when connectivity changes so offline filter applies immediately
+  useEffect(() => {
+    loadLevelsWithProgress();
+  }, [isOnline]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -126,7 +151,7 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  const navigateToCourse = (levelId) => {
+  const navigateToCourse = (levelId: string | number) => {
     router.push(`/course/${String(levelId)}`);
   };
 
@@ -179,11 +204,11 @@ export default function HomeScreen() {
             <CourseCard
               key={String(level.id ?? level._id)}
               title={level.title}
-              description={level.description}
-              progress={level.progress}
-              totalLessons={level.totalLessons}
-              completedLessons={level.completedLessons}
-              level={level.order_index}
+              description={level.description || ''}
+              progress={level.progress ?? 0}
+              totalLessons={level.totalLessons ?? 0}
+              completedLessons={level.completedLessons ?? 0}
+              level={level.order_index ?? 0}
               onPress={() => navigateToCourse(level.id ?? level._id)}
               accessibilityLabel={`${level.title} course, level ${level.order_index}, ${level.progress}% complete`}
             />
@@ -194,7 +219,23 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<{
+  container: ViewStyle;
+  content: ViewStyle;
+  header: ViewStyle;
+  welcomeText: TextStyle;
+  subtitleText: TextStyle;
+  coursesSection: ViewStyle;
+  sectionTitle: TextStyle;
+  loadingContainer: ViewStyle;
+  loadingText: TextStyle;
+  errorContainer: ViewStyle;
+  errorText: TextStyle;
+  retryText: TextStyle;
+  emptyContainer: ViewStyle;
+  emptyText: TextStyle;
+  emptySubtext: TextStyle;
+}>({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -207,19 +248,19 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   welcomeText: {
-    ...typography.h2,
+    ...(typography.h2 as any),
     color: colors.textPrimary,
     marginBottom: spacing.sm,
   },
   subtitleText: {
-    ...typography.body1,
+    ...(typography.body1 as any),
     color: colors.textSecondary,
   },
   coursesSection: {
     paddingBottom: spacing.xl,
   },
   sectionTitle: {
-    ...typography.h3,
+    ...(typography.h3 as any),
     color: colors.textPrimary,
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
@@ -229,25 +270,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    ...typography.body1,
+    ...(typography.body1 as any),
     color: colors.textSecondary,
   },
   errorContainer: {
     padding: spacing.xl,
     alignItems: 'center',
     marginHorizontal: spacing.lg,
-    backgroundColor: colors.error + '10',
+    backgroundColor: (colors.error as any) + '10',
     borderRadius: 8,
     marginBottom: spacing.md,
   },
   errorText: {
-    ...typography.body1,
+    ...(typography.body1 as any),
     color: colors.error,
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
   retryText: {
-    ...typography.body2,
+    ...(typography.body2 as any),
     color: colors.primary,
     fontWeight: '600',
   },
@@ -257,12 +298,12 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
   },
   emptyText: {
-    ...typography.h3,
+    ...(typography.h3 as any),
     color: colors.textSecondary,
     marginBottom: spacing.sm,
   },
   emptySubtext: {
-    ...typography.body2,
+    ...(typography.body2 as any),
     color: colors.textSecondary,
     textAlign: 'center',
   },

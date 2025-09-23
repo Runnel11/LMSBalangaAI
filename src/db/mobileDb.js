@@ -1,5 +1,6 @@
 // Mobile-specific database implementation using expo-sqlite
 import * as SQLite from 'expo-sqlite';
+import { logger } from '../utils/logger';
 
 let db = null;
 
@@ -98,9 +99,9 @@ export const initDB = async () => {
     `);
     
     await seedData();
-    console.log('Database initialized successfully');
+    logger.db.initialized();
   } catch (error) {
-    console.error('Error initializing database:', error);
+    logger.db.error('init', String(error));
   }
 };
 
@@ -110,20 +111,20 @@ const seedData = async () => {
 
     if (levelCount.count === 0) {
       // Try to load from Bubble first, fallback to static data
-      console.log('No local data found, attempting to load from Bubble...');
+  if (__DEV__) logger.db.query('attempt_load_from_bubble', 'levels');
 
       try {
         const { syncService } = await import('../services/syncService');
         const success = await syncService.initialContentLoad();
 
         if (success) {
-          console.log('Content loaded successfully from Bubble');
+          logger.db.query('bubble_content_loaded', 'levels');
           return;
         } else {
-          console.log('Failed to load from Bubble, using static fallback data');
+          logger.db.error('bubble_load_failed', 'fallback');
         }
       } catch (error) {
-        console.log('Error loading from Bubble, using static fallback data:', error.message);
+        logger.db.error('bubble_load_exception', String(error.message));
       }
       await db.execAsync(`
         INSERT INTO levels (title, description, order_index) VALUES
@@ -165,7 +166,7 @@ const seedData = async () => {
       `);
     }
   } catch (error) {
-    console.error('Error seeding data:', error);
+    logger.db.error('seed', String(error));
   }
 };
 
@@ -173,7 +174,7 @@ export const getLevelById = async (levelId) => {
   try {
     return await db.getFirstAsync('SELECT * FROM levels WHERE id = ?', [levelId]);
   } catch (error) {
-    console.error('Error getting level:', error);
+    logger.db.error('get_level', String(error));
     return null;
   }
 };
@@ -185,7 +186,7 @@ export const getLessonsByLevel = async (levelId) => {
       [levelId]
     );
   } catch (error) {
-    console.error('Error getting lessons:', error);
+    logger.db.error('get_lessons', String(error));
     return [];
   }
 };
@@ -194,7 +195,7 @@ export const getLessonById = async (lessonId) => {
   try {
     return await db.getFirstAsync('SELECT * FROM lessons WHERE id = ?', [lessonId]);
   } catch (error) {
-    console.error('Error getting lesson:', error);
+    logger.db.error('get_lesson', String(error));
     return null;
   }
 };
@@ -203,7 +204,7 @@ export const getQuizByLessonId = async (lessonId) => {
   try {
     return await db.getFirstAsync('SELECT * FROM quizzes WHERE lesson_id = ?', [lessonId]);
   } catch (error) {
-    console.error('Error getting quiz:', error);
+    logger.db.error('get_quiz', String(error));
     return null;
   }
 };
@@ -212,7 +213,7 @@ export const getAllLevels = async () => {
   try {
     return await db.getAllAsync('SELECT * FROM levels ORDER BY order_index');
   } catch (error) {
-    console.error('Error getting levels:', error);
+    logger.db.error('get_levels', String(error));
     return [];
   }
 };
@@ -234,7 +235,7 @@ export const getProgress = async (userId, lessonId = null, quizId = null) => {
 
     return await db.getAllAsync(query, params);
   } catch (error) {
-    console.error('Error getting progress:', error);
+    logger.db.error('get_progress', String(error));
     return [];
   }
 };
@@ -247,9 +248,9 @@ export const saveProgress = async (userId, lessonId, quizId = null, score = null
        VALUES (?, ?, ?, ?, ?, datetime('now'))`,
       [userId, lessonId, quizId, isCompleted ? 1 : 0, score]
     );
-    console.log('Progress saved successfully');
+    if (__DEV__) logger.db.query('progress_saved', 'user_progress');
   } catch (error) {
-    console.error('Error saving progress:', error);
+    logger.db.error('save_progress', String(error));
   }
 };
 
@@ -259,9 +260,9 @@ export const updateLessonDownloadStatus = async (lessonId, localFilePath, isDown
       'UPDATE lessons SET local_file_path = ?, is_downloaded = ? WHERE id = ?',
       [localFilePath, isDownloaded ? 1 : 0, lessonId]
     );
-    console.log('Lesson download status updated');
+    if (__DEV__) logger.db.query('lesson_download_status_updated', 'lessons');
   } catch (error) {
-    console.error('Error updating lesson download status:', error);
+    logger.db.error('update_lesson_download', String(error));
   }
 };
 
@@ -272,7 +273,7 @@ export const getJobsByLevel = async (minLevel = 1) => {
       [minLevel]
     );
   } catch (error) {
-    console.error('Error getting jobs:', error);
+    logger.db.error('get_jobs', String(error));
     return [];
   }
 };
@@ -285,7 +286,7 @@ export const getCompletedLessonsCount = async (userId) => {
     );
     return result?.count || 0;
   } catch (error) {
-    console.error('Error getting completed lessons count:', error);
+    logger.db.error('get_completed_lessons_count', String(error));
     return 0;
   }
 };
@@ -311,7 +312,7 @@ export const getLevelProgress = async (userId, levelId) => {
       percentage: totalLessons?.count > 0 ? Math.round((completedLessons?.count || 0) / totalLessons.count * 100) : 0
     };
   } catch (error) {
-    console.error('Error getting level progress:', error);
+    logger.db.error('get_level_progress', String(error));
     return { total: 0, completed: 0, percentage: 0 };
   }
 };
@@ -325,7 +326,7 @@ export const createUser = async (email, passwordHash, firstName, lastName) => {
     );
     return result.lastInsertRowId;
   } catch (error) {
-    console.error('Error creating user:', error);
+    logger.db.error('create_user', String(error));
     throw error;
   }
 };
@@ -334,7 +335,7 @@ export const getUserByEmail = async (email) => {
   try {
     return await db.getFirstAsync('SELECT * FROM users WHERE email = ? AND is_active = 1', [email]);
   } catch (error) {
-    console.error('Error getting user by email:', error);
+    logger.db.error('get_user_by_email', String(error));
     return null;
   }
 };
@@ -343,7 +344,7 @@ export const getUserById = async (userId) => {
   try {
     return await db.getFirstAsync('SELECT * FROM users WHERE id = ? AND is_active = 1', [userId]);
   } catch (error) {
-    console.error('Error getting user by ID:', error);
+    logger.db.error('get_user_by_id', String(error));
     return null;
   }
 };
@@ -357,9 +358,9 @@ export const saveUserDownload = async (userId, lessonId, localFilePath, fileSize
        VALUES (?, ?, ?, 1, datetime('now'), ?)`,
       [userId, lessonId, localFilePath, fileSize]
     );
-    console.log('User download saved successfully');
+    if (__DEV__) logger.db.query('user_download_saved', 'user_downloads');
   } catch (error) {
-    console.error('Error saving user download:', error);
+    logger.db.error('save_user_download', String(error));
   }
 };
 
@@ -370,7 +371,7 @@ export const getUserDownload = async (userId, lessonId) => {
       [userId, lessonId]
     );
   } catch (error) {
-    console.error('Error getting user download:', error);
+    logger.db.error('get_user_download', String(error));
     return null;
   }
 };
@@ -382,7 +383,7 @@ export const getUserDownloads = async (userId) => {
       [userId]
     );
   } catch (error) {
-    console.error('Error getting user downloads:', error);
+    logger.db.error('get_user_downloads', String(error));
     return [];
   }
 };
@@ -393,9 +394,9 @@ export const deleteUserDownload = async (userId, lessonId) => {
       'DELETE FROM user_downloads WHERE user_id = ? AND lesson_id = ?',
       [userId, lessonId]
     );
-    console.log('User download deleted successfully');
+    if (__DEV__) logger.db.query('user_download_deleted', 'user_downloads');
   } catch (error) {
-    console.error('Error deleting user download:', error);
+    logger.db.error('delete_user_download', String(error));
   }
 };
 
@@ -410,7 +411,7 @@ export const getUserDownloadSize = async (userId) => {
       fileCount: result?.file_count || 0
     };
   } catch (error) {
-    console.error('Error getting user download size:', error);
+    logger.db.error('get_user_download_size', String(error));
     return { totalSize: 0, fileCount: 0 };
   }
 };
@@ -421,9 +422,9 @@ export const clearUserDownloads = async (userId) => {
       'DELETE FROM user_downloads WHERE user_id = ?',
       [userId]
     );
-    console.log('User downloads cleared successfully');
+    if (__DEV__) logger.db.query('user_downloads_cleared', 'user_downloads');
   } catch (error) {
-    console.error('Error clearing user downloads:', error);
+    logger.db.error('clear_user_downloads', String(error));
   }
 };
 
@@ -439,10 +440,10 @@ export const repairProgressData = async (userId) => {
       [userId]
     );
     // result.changes may be available depending on expo-sqlite version
-    console.log('Repaired legacy progress rows');
+    if (__DEV__) logger.db.query('repair_legacy_progress', 'user_progress');
     return { updated: result?.changes ?? 0 };
   } catch (error) {
-    console.error('Error repairing progress data:', error);
+    logger.db.error('repair_progress', String(error));
     return { updated: 0, error };
   }
 };
@@ -461,9 +462,9 @@ export const insertLevelFromBubble = async (bubbleLevel) => {
         bubbleLevel.Created_Date || new Date().toISOString()
       ]
     );
-    console.log(`Level "${bubbleLevel.title}" inserted successfully`);
+    if (__DEV__) logger.db.query('insert_level', 'levels');
   } catch (error) {
-    console.error('Error inserting level from Bubble:', error);
+    logger.db.error('insert_level_from_bubble', String(error));
   }
 };
 
@@ -485,9 +486,9 @@ export const insertLessonFromBubble = async (bubbleLesson) => {
         bubbleLesson.Created_Date || new Date().toISOString()
       ]
     );
-    console.log(`Lesson "${bubbleLesson.title}" inserted successfully`);
+    if (__DEV__) logger.db.query('insert_lesson', 'lessons');
   } catch (error) {
-    console.error('Error inserting lesson from Bubble:', error);
+    logger.db.error('insert_lesson_from_bubble', String(error));
   }
 };
 
@@ -504,9 +505,9 @@ export const insertQuizFromBubble = async (bubbleQuiz) => {
         bubbleQuiz.Created_Date || new Date().toISOString()
       ]
     );
-    console.log(`Quiz "${bubbleQuiz.title}" inserted successfully`);
+    if (__DEV__) logger.db.query('insert_quiz', 'quizzes');
   } catch (error) {
-    console.error('Error inserting quiz from Bubble:', error);
+    logger.db.error('insert_quiz_from_bubble', String(error));
   }
 };
 
@@ -529,8 +530,8 @@ export const insertJobFromBubble = async (bubbleJob) => {
         bubbleJob.Created_Date || new Date().toISOString()
       ]
     );
-    console.log(`Job "${bubbleJob.title}" inserted successfully`);
+    if (__DEV__) logger.db.query('insert_job', 'jobs');
   } catch (error) {
-    console.error('Error inserting job from Bubble:', error);
+    logger.db.error('insert_job_from_bubble', String(error));
   }
 };

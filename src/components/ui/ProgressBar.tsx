@@ -1,13 +1,13 @@
+import { borderRadius, colors } from '@/src/config/theme';
 import React from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
-import { colors, borderRadius } from '@/src/config/theme';
+import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 
 interface ProgressBarProps {
   progress: number; // 0-100
   height?: number;
   backgroundColor?: string;
   progressColor?: string;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 export const ProgressBar: React.FC<ProgressBarProps> = ({

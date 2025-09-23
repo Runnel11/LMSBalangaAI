@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { networkService } from '../services/networkService';
 import { offlineManager } from '../services/offlineManager';
+import { logger } from '../utils/logger';
 
 const OfflineContext = createContext();
 
@@ -87,7 +88,7 @@ export const OfflineProvider = ({ children }) => {
       }
 
     } catch (error) {
-      console.error('Error initializing offline manager:', error);
+      logger.offline.syncError(String(error));
       setIsInitialized(true); // Still set to true to allow app to function
     }
   };
@@ -104,7 +105,7 @@ export const OfflineProvider = ({ children }) => {
 
   const refreshOfflineData = async () => {
     if (!isOnline) {
-      console.log('Cannot refresh offline data: currently offline');
+      logger.offline.statusChange(false);
       return false;
     }
 
@@ -116,7 +117,7 @@ export const OfflineProvider = ({ children }) => {
       }
       return success;
     } catch (error) {
-      console.error('Error refreshing offline data:', error);
+      logger.offline.syncError(String(error));
       return false;
     }
   };
@@ -131,7 +132,7 @@ export const OfflineProvider = ({ children }) => {
 
       return success;
     } catch (error) {
-      console.error('Error saving progress:', error);
+      logger.offline.syncError(String(error));
       return false;
     }
   };

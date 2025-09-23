@@ -4,7 +4,7 @@
  */
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
-type LogCategory = 'AUTH' | 'DB' | 'API' | 'NAVIGATION' | 'OFFLINE' | 'DOWNLOAD' | 'QUIZ' | 'GENERAL';
+type LogCategory = 'AUTH' | 'DB' | 'API' | 'NAVIGATION' | 'OFFLINE' | 'DOWNLOAD' | 'QUIZ' | 'GENERAL' | 'SYNC';
 
 interface LogContext {
   userId?: string;
@@ -200,6 +200,25 @@ class Logger {
       const duration = Date.now() - startTime;
       this.general.performance(label, duration, 'ms');
     };
+  };
+
+  // Synchronization logging
+  sync = {
+    start: (source?: string) => {
+      this.log('info', 'SYNC', `Sync started${source ? ` from ${source}` : ''}`, { action: 'sync_start', metadata: { source } });
+    },
+    completed: (details?: Record<string, any>) => {
+      this.log('info', 'SYNC', 'Sync completed successfully', { action: 'sync_complete', metadata: details });
+    },
+    skipped: (reason: string) => {
+      this.log('info', 'SYNC', `Sync skipped: ${reason}`, { action: 'sync_skipped', metadata: { reason } });
+    },
+    error: (message: string, context?: LogContext) => {
+      this.log('error', 'SYNC', message, { action: 'sync_error', ...(context || {}) });
+    },
+    itemSynced: (entity: string, title?: string) => {
+      this.log('debug', 'SYNC', `${entity} synced`, { action: 'sync_item', metadata: { entity, title } });
+    },
   };
 }
 

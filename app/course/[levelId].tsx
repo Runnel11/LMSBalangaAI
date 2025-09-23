@@ -9,11 +9,12 @@ import { LessonCard } from '@/src/components/ui/LessonCard';
 import { ProgressBar } from '@/src/components/ui/ProgressBar';
 import { TopAppBar } from '@/src/components/ui/TopAppBar';
 import { colors, spacing, typography } from '@/src/config/theme';
+import { useOffline } from '@/src/contexts/OfflineContext';
 import {
-  getLessonsByLevel,
-  getLevelById,
-  getLevelProgress,
-  getProgress
+    getLessonsByLevel,
+    getLevelById,
+    getLevelProgress,
+    getProgress
 } from '@/src/db/index';
 import { logger } from '@/src/utils/logger';
 import type { TextStyle, ViewStyle } from 'react-native';
@@ -46,6 +47,7 @@ export default function CourseLevelScreen() {
   const [levelProgress, setLevelProgress] = useState<{ total: number; completed: number; percentage: number }>({ total: 0, completed: 0, percentage: 0 });
   const [downloading, setDownloading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const { isOnline } = useOffline();
 
   const loadLevelData = async () => {
     const timer = logger.startTimer('Load level data');
@@ -74,9 +76,9 @@ export default function CourseLevelScreen() {
       setLevelProgress(progress);
       timer();
       logger.db.query('level', `Successfully loaded level data with ${lessonsWithProgressData.length} lessons`);
-    } catch (error) {
+    } catch (error: any) {
       timer();
-      logger.db.error('level_load', `Failed to load level ${levelId}: ${error.message}`);
+      logger.db.error('level_load', `Failed to load level ${levelId}: ${error?.message ?? String(error)}`);
       console.error('Error loading level data:', error);
     }
   };
@@ -170,6 +172,7 @@ export default function CourseLevelScreen() {
   };
 
   const hasUndownloadedLessons = lessons.some((lesson: Lesson) => !lesson.is_downloaded);
+  const visibleLessons = isOnline ? lessonsWithProgress : lessonsWithProgress.filter(l => !!l.is_downloaded);
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -203,7 +206,7 @@ export default function CourseLevelScreen() {
               />
             </View>
 
-            {hasUndownloadedLessons && (
+            {hasUndownloadedLessons && isOnline && (
               <Button
                 title={downloading ? 'Downloading...' : 'Download All Lessons'}
                 onPress={handleDownloadAll}
@@ -219,7 +222,7 @@ export default function CourseLevelScreen() {
         <View style={styles.lessonsSection as any}>
           <Text style={styles.sectionTitle as any}>Lessons</Text>
           
-          {lessonsWithProgress.map((lesson) => (
+          {visibleLessons.map((lesson) => (
             <LessonCard
               key={lesson.id}
               title={lesson.title}
@@ -230,9 +233,16 @@ export default function CourseLevelScreen() {
               order={lesson.order_index ?? 0}
               onPress={() => navigateToLesson(lesson.id)}
               onDownload={() => handleLessonDownload(lesson)}
+              canDownload={isOnline}
               accessibilityLabel={`Lesson ${lesson.order_index}: ${lesson.title}, ${lesson.estimated_duration} minutes, ${lesson.isCompleted ? 'completed' : 'not completed'}, ${lesson.is_downloaded ? 'downloaded' : 'not downloaded'}`}
             />
           ))}
+          {!isOnline && visibleLessons.length === 0 && (
+            <View style={styles.emptyContainer as any}>
+              <Text style={styles.emptyText as any}>No downloaded lessons</Text>
+              <Text style={styles.levelDescription as any}>Go online to download lessons for offline access.</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -293,5 +303,15 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
+  } as TextStyle,
+  emptyContainer: {
+    padding: spacing.xl,
+    alignItems: 'center',
+    marginHorizontal: spacing.lg,
+  } as ViewStyle,
+  emptyText: {
+    ...typography.h3,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
   } as TextStyle,
 });

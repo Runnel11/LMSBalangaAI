@@ -1,7 +1,7 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
-import { colors, typography, spacing, borderRadius, shadows } from '@/src/config/theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { borderRadius, colors, shadows, spacing, typography } from '@/src/config/theme';
+import React from 'react';
+import { Animated, StyleSheet, Text, TextStyle, TouchableOpacity, View, ViewStyle } from 'react-native';
 
 interface LessonCardProps {
   title: string;
@@ -12,6 +12,7 @@ interface LessonCardProps {
   order: number;
   onPress: () => void;
   onDownload?: () => void;
+  canDownload?: boolean; // optional gate to hide download UI (e.g., when offline)
   accessibilityLabel?: string;
 }
 
@@ -24,6 +25,7 @@ export const LessonCard: React.FC<LessonCardProps> = ({
   order,
   onPress,
   onDownload,
+  canDownload = true,
   accessibilityLabel,
 }) => {
   const scaleAnim = React.useRef(new Animated.Value(1)).current;
@@ -85,18 +87,21 @@ export const LessonCard: React.FC<LessonCardProps> = ({
             </View>
           )}
 
-          <TouchableOpacity
-            style={styles.downloadButton}
-            onPress={onDownload}
-            accessibilityLabel={isDownloaded ? 'Downloaded' : 'Download lesson'}
-            accessibilityRole="button"
-          >
-            <IconSymbol
-              name={isDownloaded ? "icloud.and.arrow.down.fill" : "icloud.and.arrow.down"}
-              size={20}
-              color={isDownloaded ? colors.success : colors.textSecondary}
-            />
-          </TouchableOpacity>
+          {/* Show download button only when download is allowed and not already downloaded */}
+          {!isDownloaded && canDownload && !!onDownload && (
+            <TouchableOpacity
+              style={styles.downloadButton}
+              onPress={onDownload}
+              accessibilityLabel={'Download lesson'}
+              accessibilityRole="button"
+            >
+              <IconSymbol
+                name="icloud.and.arrow.down"
+                size={20}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
       
@@ -118,7 +123,25 @@ export const LessonCard: React.FC<LessonCardProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<{
+  container: ViewStyle;
+  completedContainer: ViewStyle;
+  header: ViewStyle;
+  orderContainer: ViewStyle;
+  orderText: TextStyle;
+  content: ViewStyle;
+  title: TextStyle;
+  description: TextStyle;
+  actions: ViewStyle;
+  completedBadge: ViewStyle;
+  completedText: TextStyle;
+  downloadButton: ViewStyle;
+  footer: ViewStyle;
+  durationContainer: ViewStyle;
+  durationText: TextStyle;
+  downloadedIndicator: ViewStyle;
+  downloadedText: TextStyle;
+}>({
   container: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
@@ -127,7 +150,7 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
-    ...shadows.small,
+    ...(shadows.small as any),
   },
   completedContainer: {
     backgroundColor: colors.surface,
@@ -147,7 +170,7 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
   },
   orderText: {
-    ...typography.body2,
+    ...(typography.body2 as any),
     color: colors.background,
     fontWeight: '600',
   },
@@ -156,13 +179,13 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   title: {
-    ...typography.body1,
+    ...(typography.body1 as any),
     color: colors.textPrimary,
     fontWeight: '600',
     marginBottom: spacing.xs,
   },
   description: {
-    ...typography.body2,
+    ...(typography.body2 as any),
     color: colors.textSecondary,
     lineHeight: 18,
   },
@@ -180,7 +203,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   completedText: {
-    ...typography.caption,
+    ...(typography.caption as any),
     color: colors.surface,
     fontWeight: '700',
     fontSize: 10,
@@ -205,7 +228,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   durationText: {
-    ...typography.caption,
+    ...(typography.caption as any),
     color: colors.textSecondary,
   },
   downloadedIndicator: {
@@ -214,7 +237,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   downloadedText: {
-    ...typography.caption,
+    ...(typography.caption as any),
     color: colors.success,
     fontWeight: '500',
   },

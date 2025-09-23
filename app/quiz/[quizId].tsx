@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TextStyle, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/src/components/ui/Button';
@@ -118,7 +118,7 @@ export default function QuizScreen() {
 
     try {
   // Types in db may be narrower; cast to keep RN TS happy
-  await offlineManager.saveUserProgress(quiz.lesson_id as any, quiz.id as any, finalScore, true);
+  await offlineManager.saveUserProgress(String(quiz.lesson_id), String(quiz.id), finalScore, true);
       timer();
       logger.db.query('progress', `Successfully saved quiz progress: Lesson ${quiz.lesson_id}, Quiz ${quiz.id}, Score ${finalScore}%`);
     } catch (error) {
@@ -143,14 +143,14 @@ export default function QuizScreen() {
 
   if (loading) {
     return (
-  <SafeAreaView style={styles.container as any} edges={['bottom']}>
+  <SafeAreaView style={styles.container} edges={['bottom']}>
         <TopAppBar
           title="Loading..."
           showBackButton
           onBackPress={() => router.back()}
         />
-  <View style={styles.loadingContainer as any}>
-          <Text style={styles.loadingText as any}>Loading quiz...</Text>
+  <View style={styles.loadingContainer}>
+    <Text style={styles.loadingText}>Loading quiz...</Text>
         </View>
       </SafeAreaView>
     );
@@ -158,14 +158,14 @@ export default function QuizScreen() {
 
   if (!quiz) {
     return (
-  <SafeAreaView style={styles.container as any} edges={['bottom']}>
+  <SafeAreaView style={styles.container} edges={['bottom']}>
         <TopAppBar
           title="Quiz"
           showBackButton
           onBackPress={() => router.back()}
         />
-  <View style={styles.errorContainer as any}>
-          <Text style={styles.errorText as any}>Quiz not found.</Text>
+  <View style={styles.errorContainer}>
+    <Text style={styles.errorText}>Quiz not found.</Text>
         </View>
       </SafeAreaView>
     );
@@ -173,32 +173,32 @@ export default function QuizScreen() {
 
   if (showResults) {
     return (
-  <SafeAreaView style={styles.container as any} edges={['bottom']}>
+  <SafeAreaView style={styles.container} edges={['bottom']}>
         <TopAppBar
           title="Quiz Results"
           showBackButton
           onBackPress={() => router.back()}
         />
-  <ScrollView style={styles.content as any}>
+  <ScrollView style={styles.content}>
           <View style={styles.resultsContainer as any}>
-            <Text style={styles.resultsTitle as any}>Quiz Completed!</Text>
-            <Text style={styles.scoreText as any}>Your Score: {score}%</Text>
+            <Text style={styles.resultsTitle}>Quiz Completed!</Text>
+            <Text style={styles.scoreText}>Your Score: {score}%</Text>
             
-            <View style={styles.scoreBreakdown as any}>
-              <Text style={styles.breakdownText as any}>
+            <View style={styles.scoreBreakdown}>
+              <Text style={styles.breakdownText}>
                 {quiz.questions.filter((_, index) => selectedAnswers[index] === quiz.questions[index].correct).length} out of {quiz.questions.length} correct
               </Text>
             </View>
 
-            <View style={styles.resultsSummary as any}>
+            <View style={styles.resultsSummary}>
               {quiz.questions.map((question, index) => (
-                <View key={index} style={styles.questionResult as any}>
-                  <Text style={styles.questionNumber as any}>Question {index + 1}</Text>
-                  <Text style={styles.questionText as any}>{question.question}</Text>
+                <View key={index} style={styles.questionResult}>
+                  <Text style={styles.questionNumber}>Question {index + 1}</Text>
+                  <Text style={styles.questionText}>{question.question}</Text>
                   <Text style={[
                     styles.answerResult,
                     selectedAnswers[index] === question.correct ? styles.correctAnswer : styles.incorrectAnswer
-                  ]}>
+                  ] as any}>
                     Your answer: {question.options[selectedAnswers[index]]}
                     {selectedAnswers[index] !== question.correct && (
                       <>
@@ -260,7 +260,7 @@ export default function QuizScreen() {
                 style={[
                   styles.optionButton,
                   selectedAnswers[currentQuestionIndex] === index && styles.selectedOption
-                ]}
+                ] as any}
                 onPress={() => handleAnswerSelect(index)}
                 accessibilityLabel={`Option ${index + 1}: ${option}`}
                 accessibilityRole="button"
@@ -268,7 +268,7 @@ export default function QuizScreen() {
                 <Text style={[
                   styles.optionText,
                   selectedAnswers[currentQuestionIndex] === index && styles.selectedOptionText
-                ]}>
+                ] as any}>
                   {option}
                 </Text>
               </TouchableOpacity>
@@ -299,7 +299,41 @@ export default function QuizScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<{ 
+  container: ViewStyle; 
+  content: ViewStyle; 
+  loadingContainer: ViewStyle; 
+  loadingText: TextStyle; 
+  errorContainer: ViewStyle; 
+  errorText: TextStyle; 
+  quizContainer: ViewStyle; 
+  progressSection: ViewStyle; 
+  progressText: TextStyle; 
+  progressBar: ViewStyle; 
+  questionContainer: ViewStyle; 
+  questionText: TextStyle; 
+  optionsContainer: ViewStyle; 
+  optionButton: ViewStyle; 
+  selectedOption: ViewStyle; 
+  optionText: TextStyle; 
+  selectedOptionText: TextStyle; 
+  navigationSection: ViewStyle; 
+  navigationButtons: ViewStyle; 
+  navButton: ViewStyle; 
+  resultsContainer: ViewStyle; 
+  resultsTitle: TextStyle; 
+  scoreText: TextStyle; 
+  scoreBreakdown: ViewStyle; 
+  breakdownText: TextStyle; 
+  resultsSummary: ViewStyle; 
+  questionResult: ViewStyle; 
+  questionNumber: TextStyle; 
+  answerResult: TextStyle; 
+  correctAnswer: TextStyle; 
+  incorrectAnswer: TextStyle; 
+  resultsActions: ViewStyle; 
+  actionButton: ViewStyle; 
+}>({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -313,7 +347,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    ...typography.body1,
+    ...(typography.body1 as any),
     color: colors.textSecondary,
   },
   errorContainer: {
@@ -322,7 +356,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   errorText: {
-    ...typography.body1,
+    ...(typography.body1 as any),
     color: colors.error,
   },
   quizContainer: {
@@ -334,7 +368,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   progressText: {
-    ...typography.body2,
+    ...(typography.body2 as any),
     color: colors.textSecondary,
     marginBottom: spacing.sm,
     textAlign: 'center',
@@ -347,7 +381,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   questionText: {
-    ...typography.h3,
+    ...(typography.h3 as any),
     color: colors.textPrimary,
     marginBottom: spacing.xl,
     lineHeight: 28,
@@ -369,7 +403,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   optionText: {
-    ...typography.body1,
+    ...(typography.body1 as any),
     color: colors.textPrimary,
     textAlign: 'center',
   },
@@ -394,13 +428,13 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   resultsTitle: {
-    ...typography.h2,
+    ...(typography.h2 as any),
     color: colors.textPrimary,
     textAlign: 'center',
     marginBottom: spacing.lg,
   },
   scoreText: {
-    ...typography.h1,
+    ...(typography.h1 as any),
     color: colors.primary,
     textAlign: 'center',
     marginBottom: spacing.md,
@@ -410,7 +444,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   breakdownText: {
-    ...typography.body1,
+    ...(typography.body1 as any),
     color: colors.textSecondary,
   },
   resultsSummary: {
@@ -423,13 +457,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   questionNumber: {
-    ...typography.body2,
+    ...(typography.body2 as any),
     color: colors.primary,
     fontWeight: '600',
     marginBottom: spacing.xs,
   },
   answerResult: {
-    ...typography.body2,
+    ...(typography.body2 as any),
     marginTop: spacing.sm,
   },
   correctAnswer: {

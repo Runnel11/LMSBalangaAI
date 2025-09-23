@@ -1,4 +1,3 @@
-import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useOffline } from '../../contexts/OfflineContext';
 
@@ -26,7 +25,7 @@ export const OfflineIndicator = () => {
           </TouchableOpacity>
         </>
       ) : (
-        <Text style={[styles.text, { color: textColor }]}>{getOfflineStatusMessage()}</Text>
+        <Text style={[styles.text, { color: textColor }]}>Offline</Text>
       )}
     </View>
   );

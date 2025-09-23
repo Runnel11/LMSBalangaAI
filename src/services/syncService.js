@@ -9,6 +9,7 @@ import {
   insertQuizFromBubble,
   saveProgress
 } from '../db/index';
+import { logger } from '../utils/logger';
 import { bubbleApi } from './bubbleApi';
 import { networkService } from './networkService';
 import { offlineManager } from './offlineManager';
@@ -45,7 +46,7 @@ export class SyncService {
       this.isOnline = status.isConnected;
       return this.isOnline;
     } catch (error) {
-      console.error('Error checking connection:', error);
+      logger.sync.error('Error checking connection', { metadata: { error: String(error) } });
       this.isOnline = false;
       return false;
     }
@@ -54,35 +55,35 @@ export class SyncService {
   // Sync data from Bubble to local database
   async syncFromBubble() {
     if (this.syncInProgress) {
-      console.log('Sync skipped: already in progress');
+      logger.sync.skipped('already in progress');
       return;
     }
 
     // Check if we should sync on current connection type
     if (!networkService.isOnline) {
-      console.log('Sync skipped: offline');
+      logger.sync.skipped('offline');
       return;
     }
 
     if (!networkService.hasReliableConnection() && !networkService.shouldSyncOnCellular()) {
-      console.log('Sync skipped: not on reliable connection and cellular sync disabled');
+      logger.sync.skipped('not on reliable connection and cellular sync disabled');
       return;
     }
 
   this.syncInProgress = true;
   // Load stored last sync timestamp
   await this.loadLastSyncAt();
-    console.log('Starting sync from Bubble...');
+    logger.sync.start('Bubble');
 
     try {
       // Incremental sync using modified date when possible
       await this.syncLevelsFromBubble();
       await this.syncLessonsFromBubble();
       await this.syncQuizzesFromBubble?.();
-      console.log('Sync from Bubble completed successfully');
+      logger.sync.completed();
       await this.saveLastSyncAt(new Date().toISOString());
     } catch (error) {
-      console.error('Sync from Bubble failed:', error);
+      logger.sync.error('Sync from Bubble failed', { metadata: { error: String(error) } });
     } finally {
       this.syncInProgress = false;
     }
@@ -91,7 +92,7 @@ export class SyncService {
   // Sync user progress to Bubble
   async syncToBubble(userId) {
     if (!this.isOnline || !userId) {
-      console.log('Cannot sync to Bubble: offline or no user');
+      logger.sync.skipped('Cannot sync to Bubble: offline or no user');
       return;
     }
 
@@ -110,9 +111,9 @@ export class SyncService {
         });
       }
 
-      console.log('User progress synced to Bubble');
+      logger.sync.completed({ items: localProgress?.length ?? 0, direction: 'push' });
     } catch (error) {
-      console.error('Failed to sync progress to Bubble:', error);
+      logger.sync.error('Failed to sync progress to Bubble', { metadata: { error: String(error) } });
     }
   }
 
@@ -135,14 +136,14 @@ export class SyncService {
           await saveProgress(String(lessonId), quizId ? String(quizId) : null, score, isCompleted);
         }
       }
-      console.log(`Pulled ${serverProgress.length} progress rows from Bubble`);
+      logger.sync.completed({ items: serverProgress.length, direction: 'pull' });
       // Refresh cached offline data so UI can reflect latest immediately
       try {
         // cacheEssentialData will notify subscribers via offlineManager
         await offlineManager.cacheEssentialData?.();
       } catch {}
     } catch (error) {
-      console.error('Error syncing user progress from Bubble:', error);
+      logger.sync.error('Error syncing user progress from Bubble', { metadata: { error: String(error) } });
     }
   }
 
@@ -151,11 +152,11 @@ export class SyncService {
     try {
       await this.checkConnection();
       if (!this.isOnline) {
-        console.log('Cannot load initial content: offline');
+        logger.sync.skipped('Cannot load initial content: offline');
         return false;
       }
 
-      console.log('Loading initial content from Bubble...');
+      logger.sync.start('Initial content load from Bubble');
       await this.loadLastSyncAt();
 
       // Load all content types in parallel
@@ -186,12 +187,12 @@ export class SyncService {
         await insertJobFromBubble(job);
       }
 
-      console.log(`Initial content loaded: ${levels.length} levels, ${lessons.length} lessons, ${quizzes.length} quizzes, ${jobs.length} jobs`);
+      logger.sync.completed({ levels: levels.length, lessons: lessons.length, quizzes: quizzes.length, jobs: jobs.length });
   await this.saveLastSyncAt(new Date().toISOString());
   return true;
 
     } catch (error) {
-      console.error('Error loading initial content from Bubble:', error);
+      logger.sync.error('Error loading initial content from Bubble', { metadata: { error: String(error) } });
       return false;
     }
   }
@@ -208,11 +209,11 @@ export class SyncService {
 
         if (!localLevel || this.needsUpdate(localLevel, bubbleLevel)) {
           await insertLevelFromBubble(bubbleLevel);
-          console.log(`Level "${bubbleLevel.title}" synced from Bubble`);
+          logger.sync.itemSynced('Level', bubbleLevel.title);
         }
       }
     } catch (error) {
-      console.error('Error syncing levels from Bubble:', error);
+      logger.sync.error('Error syncing levels from Bubble', { metadata: { error: String(error) } });
     }
   }
 
@@ -229,11 +230,11 @@ export class SyncService {
 
         if (!localLesson || this.needsUpdate(localLesson, bubbleLesson)) {
           await insertLessonFromBubble(bubbleLesson);
-          console.log(`Lesson "${bubbleLesson.title}" synced from Bubble`);
+          logger.sync.itemSynced('Lesson', bubbleLesson.title);
         }
       }
     } catch (error) {
-      console.error('Error syncing lessons from Bubble:', error);
+      logger.sync.error('Error syncing lessons from Bubble', { metadata: { error: String(error) } });
     }
   }
 
@@ -245,10 +246,10 @@ export class SyncService {
         const levelId = bubbleQuiz.lesson_id?._id || bubbleQuiz.lesson_id;
         if (!levelId) continue;
         await insertQuizFromBubble(bubbleQuiz);
-        console.log(`Quiz "${bubbleQuiz.title}" synced from Bubble`);
+        logger.sync.itemSynced('Quiz', bubbleQuiz.title);
       }
     } catch (error) {
-      console.error('Error syncing quizzes from Bubble:', error);
+      logger.sync.error('Error syncing quizzes from Bubble', { metadata: { error: String(error) } });
     }
   }
 

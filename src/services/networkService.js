@@ -1,5 +1,6 @@
 import NetInfo from '@react-native-community/netinfo';
 import { Platform } from 'react-native';
+import { logger } from '../utils/logger';
 
 export class NetworkService {
   constructor() {
@@ -34,7 +35,7 @@ export class NetworkService {
 
     // Notify listeners if status changed
     if (wasOnline !== this.isOnline) {
-      console.log(`Network status changed: ${this.isOnline ? 'ONLINE' : 'OFFLINE'} (${this.connectionType})`);
+      logger.offline.statusChange(this.isOnline);
       this.notifyListeners(this.isOnline, this.connectionType);
     }
   };
@@ -46,7 +47,7 @@ export class NetworkService {
     this.connectionType = 'wifi'; // Assume wifi for web
 
     if (!wasOnline) {
-      console.log('Network status changed: ONLINE (web)');
+      logger.offline.statusChange(true);
       this.notifyListeners(true, 'wifi');
     }
   };
@@ -57,7 +58,7 @@ export class NetworkService {
     this.connectionType = 'none';
 
     if (wasOnline) {
-      console.log('Network status changed: OFFLINE (web)');
+      logger.offline.statusChange(false);
       this.notifyListeners(false, 'none');
     }
   };
@@ -81,7 +82,7 @@ export class NetworkService {
       try {
         callback(isOnline, connectionType);
       } catch (error) {
-        console.error('Error in network listener:', error);
+        logger.offline.syncError(String(error));
       }
     });
   }

@@ -4,6 +4,7 @@ import {
     getProgress,
     saveProgress
 } from '../db/index';
+import { logger } from '../utils/logger';
 import { bubbleApi } from './bubbleApi';
 import { networkService } from './networkService';
 import { syncService } from './syncService';
@@ -42,16 +43,16 @@ export class OfflineManager {
       networkService.addListener(this.handleNetworkChange);
 
       this.isInitialized = true;
-      console.log('OfflineManager initialized successfully');
+      logger.offline.statusChange(networkService.isOnline);
     } catch (error) {
-      console.error('Error initializing OfflineManager:', error);
+      logger.offline.syncError(String(error));
     }
   }
 
   // Handle network connectivity changes
   handleNetworkChange = async (isOnline, connectionType) => {
     if (isOnline) {
-      console.log('📶 Back online - attempting to sync pending data');
+        logger.offline.statusChange(true);
       await this.syncPendingData();
 
       // Auto-download if on WiFi and setting is enabled
@@ -59,7 +60,7 @@ export class OfflineManager {
         await this.autoDownloadEssentialContent();
       }
     } else {
-      console.log('📵 Gone offline - switching to offline mode');
+        logger.offline.statusChange(false);
     }
   };
 
@@ -84,7 +85,7 @@ export class OfflineManager {
   // Cache essential data for offline use
   async cacheEssentialData() {
     try {
-      console.log('📦 Caching essential data for offline use...');
+        logger.offline.syncStart();
 
       const data = {
         levels: await getAllLevels(),
@@ -111,10 +112,10 @@ export class OfflineManager {
   // Notify subscribers so UI can update immediately
   this.notifySubscribers();
 
-      console.log(`✅ Cached ${data.levels.length} levels and ${Object.keys(data.lessons).length} lesson groups`);
+        logger.offline.syncComplete(data.levels.length + Object.keys(data.lessons).length);
       return true;
     } catch (error) {
-      console.error('Error caching essential data:', error);
+        logger.offline.syncError(String(error));
       return false;
     }
   }
@@ -122,12 +123,12 @@ export class OfflineManager {
   // Auto-download essential content when on WiFi
   async autoDownloadEssentialContent() {
     if (!networkService.hasReliableConnection()) {
-      console.log('Not on reliable connection, skipping auto-download');
+        logger.offline.statusChange(false);
       return;
     }
 
     try {
-      console.log('📱 Auto-downloading essential content...');
+        logger.download.started('essential');
 
       const levels = await getAllLevels();
 
@@ -138,12 +139,12 @@ export class OfflineManager {
         for (const lesson of lessons.slice(0, 3)) {
           if (!lesson.is_downloaded) {
             // Note: This would require integration with your download manager
-            console.log(`Auto-downloading lesson: ${lesson.title}`);
+              logger.download.started(String(lesson.id));
           }
         }
       }
     } catch (error) {
-      console.error('Error auto-downloading content:', error);
+        logger.download.failed('essential', String(error));
     }
   }
 
@@ -161,9 +162,9 @@ export class OfflineManager {
       this.pendingSyncData.push(syncItem);
       await AsyncStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(this.pendingSyncData));
 
-      console.log(`📋 Queued ${action} for sync:`, data);
+        logger.offline.syncStart();
     } catch (error) {
-      console.error('Error queuing data for sync:', error);
+        logger.offline.syncError(String(error));
     }
   }
 
@@ -173,7 +174,7 @@ export class OfflineManager {
       return;
     }
 
-    console.log(`🔄 Syncing ${this.pendingSyncData.length} pending items...`);
+      logger.offline.syncStart();
 
     const successfulSyncs = [];
     const failedSyncs = [];
@@ -205,7 +206,7 @@ export class OfflineManager {
               }
             } catch (e) {
               // Non-fatal: keep success true so we don't block the queue; upsert will retry via future actions
-              console.warn('Non-fatal: Bubble upsert during syncPendingData failed; will rely on future attempts.', e?.message || e);
+              logger.offline.syncError('Non-fatal upsert failure during syncPendingData');
             }
             success = true;
             break;
@@ -222,7 +223,7 @@ export class OfflineManager {
             break;
 
           default:
-            console.warn('Unknown sync action:', item.action);
+            logger.offline.syncError(`Unknown sync action: ${item.action}`);
         }
 
         if (success) {
@@ -230,12 +231,12 @@ export class OfflineManager {
         } else {
           item.retryCount++;
           if (item.retryCount >= 3) {
-            console.error('Max retries reached for sync item:', item);
+            logger.offline.syncError('Max retries reached for sync item');
             failedSyncs.push(item.id);
           }
         }
       } catch (error) {
-        console.error('Error syncing item:', item, error);
+          logger.offline.syncError(String(error));
         item.retryCount++;
         if (item.retryCount >= 3) {
           failedSyncs.push(item.id);
@@ -250,11 +251,17 @@ export class OfflineManager {
 
     await AsyncStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(this.pendingSyncData));
 
-    console.log(`✅ Sync complete: ${successfulSyncs.length} successful, ${failedSyncs.length} failed`);
+      logger.offline.syncComplete(successfulSyncs.length);
   }
 
   // Save progress (works offline and online)
-  async saveUserProgress(lessonId, quizId = null, score = null, isCompleted = true) {
+  /**
+   * @param {string|number} lessonId
+   * @param {string|number|null} [quizId]
+   * @param {number|null} [score]
+   * @param {boolean} [isCompleted]
+   */
+  async saveUserProgress(lessonId, quizId = undefined, score = undefined, isCompleted = true) {
     try {
       // Always save locally first
       await saveProgress(lessonId, quizId, score, isCompleted);
@@ -274,9 +281,9 @@ export class OfflineManager {
           } else {
             // If no user scope, do not queue a server sync item; keep local only
           }
-          console.log('Progress saved locally and synced to Bubble');
+            logger.offline.syncComplete(1);
         } catch (syncError) {
-          console.log('Online write-through failed, queued for retry');
+            logger.offline.syncError('Online write-through failed, queued for retry');
           await this.queueForSync('saveProgress', {
             lessonId,
             quizId,
@@ -292,12 +299,12 @@ export class OfflineManager {
           score,
           isCompleted
         });
-        console.log('Progress saved offline, will sync when online');
+          logger.offline.syncStart();
       }
 
       return true;
     } catch (error) {
-      console.error('Error saving user progress:', error);
+        logger.offline.syncError(String(error));
       return false;
     }
   }
@@ -319,7 +326,7 @@ export class OfflineManager {
       const data = await AsyncStorage.getItem(OFFLINE_DATA_KEY);
       this.offlineData = data ? JSON.parse(data) : null;
     } catch (error) {
-      console.error('Error loading offline data:', error);
+        logger.offline.syncError(String(error));
       this.offlineData = null;
     }
   }
@@ -330,7 +337,7 @@ export class OfflineManager {
       const data = await AsyncStorage.getItem(PENDING_SYNC_KEY);
       this.pendingSyncData = data ? JSON.parse(data) : [];
     } catch (error) {
-      console.error('Error loading pending sync data:', error);
+        logger.offline.syncError(String(error));
       this.pendingSyncData = [];
     }
   }
@@ -343,7 +350,7 @@ export class OfflineManager {
         this.settings = { ...this.settings, ...JSON.parse(data) };
       }
     } catch (error) {
-      console.error('Error loading settings:', error);
+        logger.offline.syncError(String(error));
     }
   }
 
@@ -366,10 +373,10 @@ export class OfflineManager {
       ]);
       this.offlineData = null;
       this.pendingSyncData = [];
-      console.log('Offline data cleared');
+        logger.offline.syncComplete(0);
       this.notifySubscribers();
     } catch (error) {
-      console.error('Error clearing offline data:', error);
+        logger.offline.syncError(String(error));
     }
   }
 
@@ -392,7 +399,7 @@ export class OfflineManager {
       try {
         cb(this.offlineData);
       } catch (e) {
-        console.error('Error in offlineManager subscriber:', e);
+          logger.offline.syncError(String(e));
       }
     }
   }

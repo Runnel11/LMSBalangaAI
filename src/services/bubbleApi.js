@@ -1,4 +1,6 @@
 // Bubble.io API Service for authentication and data synchronization
+import { logger } from '../utils/logger';
+
 export class BubbleApiService {
   constructor(apiKey, baseUrl = 'https://balangaai.bubbleapps.io/version-test/api/1.1') {
     this.baseUrl = baseUrl;
@@ -48,7 +50,7 @@ export class BubbleApiService {
   }
 
   // Offline-friendly token validation: allow app to continue without network
-  async validateToken(token) {
+  async validateTokenLocal(token) {
     try {
       // If no token provided, treat as unauthenticated but don't block offline usage
       if (!token) return true;
@@ -86,7 +88,7 @@ export class BubbleApiService {
         count: data.response?.count || (data.response?.results?.length ?? 0),
       };
     } catch (err) {
-      console.error('Bubble Data API list error:', dataType, err.message);
+      logger.api.error(`Data API list ${dataType}`, err.message);
       throw err;
     }
   }
@@ -137,7 +139,7 @@ export class BubbleApiService {
       // Some Bubble responses nest under response
       return data.response || data;
     } catch (err) {
-      console.error('Bubble Data API getObjectById error:', dataType, id, err.message);
+      logger.api.error(`Data API get ${dataType}/${id}`, err.message);
       throw err;
     }
   }
@@ -196,14 +198,14 @@ export class BubbleApiService {
       }
       return await res.json();
     } catch (err) {
-      console.error('Bubble Data API upsertProgress error:', err.message);
+      logger.api.error('Bubble upsertProgress', err.message);
       throw err;
     }
   }
 
   // Authentication methods
   async authenticateUser(email, password) {
-    console.log('🔐 Attempting login with:', { email, baseUrl: this.baseUrl });
+  logger.auth.loginAttempt(email);
 
     try {
       const requestBody = {
@@ -211,12 +213,8 @@ export class BubbleApiService {
         password: password
       };
 
-      console.log('📤 Sending request to:', `${this.baseUrl}/wf/login`);
-      console.log('📤 Request headers:', {
-        'Authorization': `Bearer ${this.apiKey.substring(0, 8)}...`,
-        'Content-Type': 'application/json'
-      });
-      console.log('📤 Request body:', requestBody);
+      // Debug-request details retained via logger in dev only
+      if (__DEV__) logger.api.request('/wf/login', 'POST');
 
       // Call your Bubble login endpoint that returns a user token
       const response = await fetch(`${this.baseUrl}/wf/login`, {
@@ -228,15 +226,9 @@ export class BubbleApiService {
         body: JSON.stringify(requestBody)
       });
 
-      console.log('📥 Response status:', response.status);
-      console.log('📥 Response ok:', response.ok);
+  if (__DEV__) logger.api.success('/wf/login', 0);
 
-      const responseText = await response.text();
-      console.log('📥 Raw response:', responseText);
-
-      // Log the exact response format for debugging
-      console.log('📥 Response type:', typeof responseText);
-      console.log('📥 Response length:', responseText.length);
+  const responseText = await response.text();
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: Authentication failed - ${responseText}`);
@@ -246,11 +238,11 @@ export class BubbleApiService {
       try {
         data = JSON.parse(responseText);
       } catch (parseError) {
-        console.error('❌ Failed to parse response as JSON:', parseError);
+        logger.api.error('Failed to parse login response JSON', String(parseError));
         throw new Error('Invalid response format from server');
       }
 
-      console.log('📥 Parsed response:', data);
+      if (__DEV__) logger.api.success('/wf/login parse', 0);
 
       // Handle your specific Bubble response format
       // SUCCESS: { "response": "success", "user": {...}, "token": "...", ... }
@@ -276,12 +268,7 @@ export class BubbleApiService {
 
         const token = data.user_token || data.token || this.generateToken(user);
 
-        console.log('✅ Login successful:', {
-          user: userData,
-          token: token.substring(0, 10) + '...',
-          progress: data.progress,
-          storage: data.storage
-        });
+        logger.auth.loginSuccess(user.id);
 
         return {
           success: true,
@@ -296,15 +283,11 @@ export class BubbleApiService {
         const errorType = data.error || 'unknown_error';
         const errorMessage = data.message || 'Authentication failed';
 
-        console.log('❌ Bubble authentication failed:', {
-          error: errorType,
-          message: errorMessage,
-          fullResponse: data
-        });
+        logger.auth.loginFailure(errorMessage, errorType);
 
         // Special handling for account_not_found error
         if (errorType === 'account_not_found') {
-          console.log('🔍 Account not found - this should trigger signup flow');
+          if (__DEV__) logger.api.error('account_not_found', 'signup flow');
         }
 
         // Return structured error response
@@ -325,7 +308,7 @@ export class BubbleApiService {
         };
       }
     } catch (error) {
-      console.error('❌ Bubble authentication error:', error);
+  logger.auth.loginFailure(error.message, 'auth_exception');
 
       // Determine error type based on error characteristics
       let errorType = 'network_error';
@@ -363,7 +346,7 @@ export class BubbleApiService {
       const data = await response.json();
       return data.response === 'success' && data.valid === true;
     } catch (error) {
-      console.error('Token validation error:', error);
+      logger.api.error('Token validation error', String(error));
       return false; // Assume invalid on error
     }
   }
@@ -414,7 +397,7 @@ export class BubbleApiService {
         throw new Error('An account with this email already exists.');
       }
     } catch (error) {
-      console.error('Bubble user creation error:', error);
+      logger.auth.signupFailure(String(error));
       return {
         success: false,
         error: error.message
@@ -435,7 +418,7 @@ export class BubbleApiService {
       const data = await response.json();
       return data.response?.results || [];
     } catch (error) {
-      console.error('Error syncing levels:', error);
+      logger.api.error('Error syncing levels', String(error));
       return [];
     }
   }
@@ -451,7 +434,7 @@ export class BubbleApiService {
       const data = await response.json();
       return data.response?.results || [];
     } catch (error) {
-      console.error('Error syncing lessons:', error);
+      logger.api.error('Error syncing lessons', String(error));
       return [];
     }
   }
@@ -467,7 +450,7 @@ export class BubbleApiService {
       const data = await response.json();
       return data.response?.results || [];
     } catch (error) {
-      console.error('Error syncing quizzes:', error);
+      logger.api.error('Error syncing quizzes', String(error));
       return [];
     }
   }
@@ -478,7 +461,7 @@ export class BubbleApiService {
       // Use the same list method for consistency/pagination
       return await this.listAllObjects('job');
     } catch (error) {
-      console.error('Error syncing jobs:', error);
+      logger.api.error('Error syncing jobs', String(error));
       return [];
     }
   }
@@ -500,7 +483,7 @@ export class BubbleApiService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error syncing user progress:', error);
+      logger.api.error('Error syncing user progress', String(error));
       throw error;
     }
   }
@@ -518,7 +501,7 @@ export class BubbleApiService {
       const data = await response.json();
       return data.response?.results || [];
     } catch (error) {
-      console.error('Error fetching user progress:', error);
+      logger.api.error('Error fetching user progress', String(error));
       return [];
     }
   }

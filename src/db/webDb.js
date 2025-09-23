@@ -1,6 +1,7 @@
 // Web-compatible database implementation using localStorage
 // Note: We no longer seed mock data. On first run, we fetch from Bubble if local cache is empty.
 import { bubbleApi } from '../services/bubbleApi';
+import { logger } from '../utils/logger';
 
 // Minimal state shape stored under a single key for compatibility
 const STORAGE_KEY = 'balangaai_data';
@@ -134,14 +135,14 @@ const fetchIfEmpty = async (key, fetcher, normalizer) => {
       return normalized;
     }
   } catch (err) {
-    console.warn(`webDb: failed to fetch ${key} from Bubble`, err);
+    logger.api.error(`webDb: failed to fetch ${key} from Bubble`, String(err));
   }
   return items; // still empty
 };
 
 export const initDB = async () => {
   initWebStorage();
-  console.log('Web database initialized');
+  if (__DEV__) logger.db.initialized();
 };
 
 // Keep the old export for compatibility
@@ -290,7 +291,7 @@ export const saveProgress = async (lessonId, quizId = null, score = null, isComp
   }
   
   setWebData(data);
-  console.log('Progress saved successfully (web)');
+  if (__DEV__) logger.db.query('progress_saved_web', 'user_progress');
 };
 
 export const updateLessonDownloadStatus = async (lessonId, localFilePath, isDownloaded = true) => {
@@ -301,7 +302,7 @@ export const updateLessonDownloadStatus = async (lessonId, localFilePath, isDown
     lesson.is_downloaded = isDownloaded ? 1 : 0;
     setWebData(data);
   }
-  console.log('Lesson download status updated (web)');
+  if (__DEV__) logger.db.query('lesson_download_updated_web', 'lessons');
 };
 
 export const getJobsByLevel = async (minLevel = 1) => {
@@ -327,7 +328,7 @@ export const getJobsByLevel = async (minLevel = 1) => {
       setWebData(updated);
       jobs = normalized;
     } catch (e) {
-      console.warn('webDb: failed to refresh jobs, falling back to cache', e);
+      logger.api.error('webDb: failed to refresh jobs', String(e));
       if (!jobs) jobs = [];
     }
   }
@@ -358,7 +359,7 @@ export const getJobsByLevel = async (minLevel = 1) => {
         buildMap();
       }
     } catch (e) {
-      console.warn('webDb: failed to refresh levels for job mapping', e);
+      logger.api.error('webDb: failed to refresh levels for job mapping', String(e));
     }
   }
 

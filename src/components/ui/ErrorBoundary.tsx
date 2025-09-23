@@ -1,9 +1,9 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
-import { colors, typography, spacing, borderRadius } from '@/src/config/theme';
 import { Logo } from '@/src/components/ui/Logo';
+import { borderRadius, colors, spacing, typography } from '@/src/config/theme';
+import { router } from 'expo-router';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { ScrollView, StyleSheet, Text, TextStyle, TouchableOpacity, View, ViewStyle } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface Props {
   children: ReactNode;
@@ -118,7 +118,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <View style={styles.errorContainer}>
               <Text style={styles.title}>Oops! Something went wrong</Text>
               <Text style={styles.subtitle}>
-                We're sorry, but something unexpected happened. Don't worry - your progress is saved.
+                We&apos;re sorry, but something unexpected happened. Don&apos;t worry - your progress is saved.
               </Text>
 
               {__DEV__ && this.state.error && (
@@ -170,7 +170,26 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<{
+  container: ViewStyle;
+  content: ViewStyle;
+  logoContainer: ViewStyle;
+  errorContainer: ViewStyle;
+  title: TextStyle;
+  subtitle: TextStyle;
+  debugContainer: ViewStyle;
+  debugTitle: TextStyle;
+  debugText: TextStyle;
+  debugStack: TextStyle;
+  actionsContainer: ViewStyle;
+  button: ViewStyle;
+  primaryButton: ViewStyle;
+  secondaryButton: ViewStyle;
+  buttonText: TextStyle;
+  primaryButtonText: TextStyle;
+  secondaryButtonText: TextStyle;
+  helpText: TextStyle;
+}>({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -190,13 +209,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl * 2,
   },
   title: {
-    ...typography.h1,
+    ...(typography.h1 as any),
     color: colors.textPrimary,
     textAlign: 'center',
     marginBottom: spacing.md,
   },
   subtitle: {
-    ...typography.body1,
+    ...(typography.body1 as any),
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
@@ -212,18 +231,18 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   debugTitle: {
-    ...typography.body2,
+    ...(typography.body2 as any),
     color: colors.error,
     fontWeight: '600',
     marginBottom: spacing.sm,
   },
   debugText: {
-    ...typography.caption,
+    ...(typography.caption as any),
     color: colors.textPrimary,
     marginBottom: spacing.sm,
   },
   debugStack: {
-    ...typography.caption,
+    ...(typography.caption as any),
     color: colors.textSecondary,
     fontFamily: 'monospace',
     fontSize: 10,
@@ -250,7 +269,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   buttonText: {
-    ...typography.button,
+    ...(typography.button as any),
     fontWeight: '600',
   },
   primaryButtonText: {
@@ -260,7 +279,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   helpText: {
-    ...typography.caption,
+    ...(typography.caption as any),
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 18,

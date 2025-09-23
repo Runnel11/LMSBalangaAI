@@ -1,6 +1,6 @@
 // Web-compatible download manager
-import { Platform } from 'react-native';
-import { updateLessonDownloadStatus } from '../db/index';
+import { getAllLevels, getLessonById, getLessonsByLevel, updateLessonDownloadStatus } from '../db/index';
+import { logger } from '../utils/logger';
 
 export const downloadLesson = async (lesson, onProgress = null) => {
   try {
@@ -19,7 +19,7 @@ export const downloadLesson = async (lesson, onProgress = null) => {
       message: 'Lesson downloaded successfully'
     };
   } catch (error) {
-    console.error('Error downloading lesson:', error);
+    logger.download.failed(String(lesson?.id ?? ''), String(error?.message ?? error));
     return {
       success: false,
       error: error.message,
@@ -82,7 +82,7 @@ export const getLocalLessonContent = async (lesson) => {
     }
     return null;
   } catch (error) {
-    console.error('Error reading local lesson content:', error);
+    logger.download.failed(String(lesson?.id ?? ''), String(error?.message ?? error));
     return null;
   }
 };
@@ -92,7 +92,7 @@ export const deleteLocalLesson = async (lesson) => {
     await updateLessonDownloadStatus(lesson.id, null, false);
     return { success: true, message: 'Lesson deleted successfully' };
   } catch (error) {
-    console.error('Error deleting local lesson:', error);
+    logger.download.failed(String(lesson?.id ?? ''), String(error?.message ?? error));
     return { success: false, error: error.message };
   }
 };
@@ -105,7 +105,7 @@ export const getDownloadedLessonsSize = async () => {
       formattedSize: '1.0 MB'
     };
   } catch (error) {
-    console.error('Error calculating downloaded lessons size:', error);
+    logger.download.failed('size_calc', String(error?.message ?? error));
     return { totalSize: 0, fileCount: 0, formattedSize: '0 B' };
   }
 };
@@ -115,11 +115,66 @@ export const clearAllDownloads = async () => {
     console.log('Downloads cleared (web simulation)');
     return { success: true, message: 'All downloads cleared successfully' };
   } catch (error) {
-    console.error('Error clearing downloads:', error);
+    logger.download.failed('clear_all', String(error?.message ?? error));
     return { success: false, error: error.message };
   }
 };
 
 export const isNetworkAvailable = async () => {
   return true; // Always assume network is available on web
+};
+
+// Parity helper APIs without real FS metadata; sizes are approximated or 0
+export const isLessonDownloaded = async (lessonId) => {
+  try {
+    const lesson = await getLessonById(String(lessonId));
+    return !!lesson?.is_downloaded;
+  } catch {
+    return false;
+  }
+};
+
+export const getOfflineLessons = async (levelId = null) => {
+  const results = [];
+  try {
+    const addMeta = async (lesson) => {
+      results.push({ lessonId: lesson.id, title: lesson.title, totalSizeBytes: 0, updatedAt: new Date().toISOString() });
+    };
+    if (levelId) {
+      const lessons = await getLessonsByLevel(String(levelId));
+      for (const l of lessons) if (l.is_downloaded) await addMeta(l);
+    } else {
+      const levels = await getAllLevels();
+      for (const lvl of levels) {
+        const lessons = await getLessonsByLevel(String(lvl.id ?? lvl._id));
+        for (const l of lessons) if (l.is_downloaded) await addMeta(l);
+      }
+    }
+  } catch (e) {
+    logger.offline.syncError(String(e));
+  }
+  return results;
+};
+
+export const getTotalOfflineSize = async () => {
+  try {
+    const meta = await getOfflineLessons(null);
+    return meta.reduce((sum, m) => sum + (m.totalSizeBytes || 0), 0);
+  } catch {
+    return 0;
+  }
+};
+
+export const deleteLevelDownloads = async (levelId) => {
+  try {
+    const lessons = await getLessonsByLevel(String(levelId));
+    for (const l of lessons) {
+      if (l.is_downloaded) {
+        await deleteLocalLesson(l);
+      }
+    }
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: String(e) };
+  }
 };
