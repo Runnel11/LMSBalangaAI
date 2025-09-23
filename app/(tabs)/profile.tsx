@@ -9,8 +9,9 @@ import { borderRadius, colors, shadows, spacing, typography } from '@/src/config
 import { useAuth } from '@/src/contexts/AuthContext';
 import { getAllLevels, getCompletedLessonsCount, getLevelProgress } from '@/src/db/index';
 import { clearAllDownloads, getDownloadedLessonsSize as getDownloadSize } from '@/src/services/downloadManager';
-import { useFocusEffect } from '@react-navigation/native';
+import { paymentService } from '@/src/services/paymentService';
 import { logger } from '@/src/utils/logger';
+import { useFocusEffect } from '@react-navigation/native';
 
 interface UserStats {
   completedLessons: number;
@@ -314,6 +315,16 @@ export default function ProfileScreen() {
 
         {/* Actions Section */}
         <View style={styles.actionsSection}>
+          <Button
+            title="Restore Purchases"
+            onPress={async () => {
+              const ids = await paymentService.refreshEntitlements();
+              Alert.alert('Purchases Restored', ids.length > 0 ? `Unlocked levels: ${ids.join(', ')}` : 'No purchases found.');
+            }}
+            variant="primary"
+            style={styles.actionButton}
+          />
+
           <Button
             title="Export Progress"
             onPress={handleExportProgress}

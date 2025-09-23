@@ -220,6 +220,22 @@ class Logger {
       this.log('debug', 'SYNC', `${entity} synced`, { action: 'sync_item', metadata: { entity, title } });
     },
   };
+
+  // Payments & purchases
+  payments = {
+    started: (productId: string, amount?: number, currency?: string) => {
+      this.log('info', 'GENERAL', `Payment started for ${productId}`, { action: 'payment_start', metadata: { productId, amount, currency } });
+    },
+    success: (action: string, metadata?: Record<string, any>) => {
+      this.log('info', 'GENERAL', `Payment success: ${action}`, { action: 'payment_success', metadata });
+    },
+    error: (action: string, error: string) => {
+      this.log('error', 'GENERAL', `Payment error during ${action}`, { action: 'payment_error', metadata: { error } });
+    },
+    info: (action: string, metadata?: Record<string, any>) => {
+      this.log('debug', 'GENERAL', `Payment info: ${action}`, { action: 'payment_info', metadata });
+    },
+  };
 }
 
 // Export singleton instance
@@ -227,3 +243,4 @@ export const logger = new Logger();
 
 // Export for testing
 export { Logger };
+

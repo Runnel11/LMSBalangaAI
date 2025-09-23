@@ -16,6 +16,7 @@ import {
     getLevelProgress,
     getProgress
 } from '@/src/db/index';
+import { paymentService } from '@/src/services/paymentService';
 import { logger } from '@/src/utils/logger';
 import type { TextStyle, ViewStyle } from 'react-native';
 // CommonJS module, prefer require to avoid TS named export issues
@@ -46,6 +47,7 @@ export default function CourseLevelScreen() {
   const [lessonsWithProgress, setLessonsWithProgress] = useState<LessonWithProgress[]>([]);
   const [levelProgress, setLevelProgress] = useState<{ total: number; completed: number; percentage: number }>({ total: 0, completed: 0, percentage: 0 });
   const [downloading, setDownloading] = useState(false);
+  const [isUnlocked, setIsUnlocked] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState(false);
   const { isOnline } = useOffline();
 
@@ -74,6 +76,14 @@ export default function CourseLevelScreen() {
       setLessons(lessonsData);
       setLessonsWithProgress(lessonsWithProgressData);
       setLevelProgress(progress);
+      // Determine if this level requires purchase and whether user unlocked it
+      const orderIndex = (levelData as any)?.order_index ?? 0;
+      if (orderIndex > 2) {
+        const unlocked = await paymentService.isLevelUnlocked({ levelId: String(levelId), orderIndex });
+        setIsUnlocked(!!unlocked);
+      } else {
+        setIsUnlocked(true);
+      }
       timer();
       logger.db.query('level', `Successfully loaded level data with ${lessonsWithProgressData.length} lessons`);
     } catch (error: any) {
@@ -174,6 +184,9 @@ export default function CourseLevelScreen() {
   const hasUndownloadedLessons = lessons.some((lesson: Lesson) => !lesson.is_downloaded);
   const visibleLessons = isOnline ? lessonsWithProgress : lessonsWithProgress.filter(l => !!l.is_downloaded);
 
+  const orderIndex = (level as any)?.order_index ?? 0;
+  const locked = orderIndex > 2 && !isUnlocked;
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <TopAppBar
@@ -206,7 +219,7 @@ export default function CourseLevelScreen() {
               />
             </View>
 
-            {hasUndownloadedLessons && isOnline && (
+            {!locked && hasUndownloadedLessons && isOnline && (
               <Button
                 title={downloading ? 'Downloading...' : 'Download All Lessons'}
                 onPress={handleDownloadAll}
@@ -216,13 +229,30 @@ export default function CourseLevelScreen() {
                 accessibilityLabel="Download all lessons for offline access"
               />
             )}
+
+            {locked && (
+              <View style={{ marginTop: spacing.md }}>
+                <Text style={styles.levelDescription as any}>Unlock this level to access its lessons.</Text>
+                <Button
+                  title={`Unlock Level ${orderIndex}`}
+                  onPress={async () => {
+                    await paymentService.startCheckout({
+                      levelId: String(levelId),
+                      productId: `level_${orderIndex}`,
+                      amount: null,
+                      currency: 'PHP',
+                    });
+                  }}
+                />
+              </View>
+            )}
           </View>
         )}
 
         <View style={styles.lessonsSection as any}>
           <Text style={styles.sectionTitle as any}>Lessons</Text>
           
-          {visibleLessons.map((lesson) => (
+          {!locked && visibleLessons.map((lesson) => (
             <LessonCard
               key={lesson.id}
               title={lesson.title}
@@ -237,6 +267,12 @@ export default function CourseLevelScreen() {
               accessibilityLabel={`Lesson ${lesson.order_index}: ${lesson.title}, ${lesson.estimated_duration} minutes, ${lesson.isCompleted ? 'completed' : 'not completed'}, ${lesson.is_downloaded ? 'downloaded' : 'not downloaded'}`}
             />
           ))}
+          {locked && (
+            <View style={styles.emptyContainer as any}>
+              <Text style={styles.emptyText as any}>Level Locked</Text>
+              <Text style={styles.levelDescription as any}>Purchase required to view lessons.</Text>
+            </View>
+          )}
           {!isOnline && visibleLessons.length === 0 && (
             <View style={styles.emptyContainer as any}>
               <Text style={styles.emptyText as any}>No downloaded lessons</Text>

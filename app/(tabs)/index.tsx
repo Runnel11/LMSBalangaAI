@@ -10,6 +10,7 @@ import { TopAppBar } from '@/src/components/ui/TopAppBar';
 import { colors, spacing, typography } from '@/src/config/theme';
 import { useOffline } from '@/src/contexts/OfflineContext';
 import { getAllLevels, getLevelProgress } from '@/src/db/index';
+import { paymentService } from '@/src/services/paymentService';
 import { logger } from '@/src/utils/logger';
 // CommonJS to avoid TS named export issues for platform module
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -135,6 +136,8 @@ export default function HomeScreen() {
   useFocusEffect(
     React.useCallback(() => {
       loadLevelsWithProgress();
+      // Refresh entitlements on return to home to reflect latest purchases
+      paymentService.refreshEntitlements().catch(() => {});
       return () => {};
     }, [])
   );
@@ -209,7 +212,23 @@ export default function HomeScreen() {
               totalLessons={level.totalLessons ?? 0}
               completedLessons={level.completedLessons ?? 0}
               level={level.order_index ?? 0}
-              onPress={() => navigateToCourse(level.id ?? level._id)}
+              onPress={async () => {
+                const order = level.order_index ?? 0;
+                if (order > 2) {
+                  const unlocked = await paymentService.isLevelUnlocked({ levelId: level.id ?? level._id, orderIndex: order });
+                  if (!unlocked) {
+                    await paymentService.startCheckout({
+                      levelId: String(level.id ?? level._id),
+                      productId: `level_${order}`,
+                      // Amount will be set server-side; pass null for safety
+                      amount: null,
+                      currency: 'PHP',
+                    });
+                    return;
+                  }
+                }
+                navigateToCourse(level.id ?? level._id);
+              }}
               accessibilityLabel={`${level.title} course, level ${level.order_index}, ${level.progress}% complete`}
             />
           ))}
