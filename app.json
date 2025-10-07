@@ -9,7 +9,14 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "This app uses location to show relevant events and content in your area.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app uses location to show relevant events and content in your area.",
+        "NSCameraUsageDescription": "This app may use the camera to capture photos for profile or content sharing.",
+        "NSPhotoLibraryUsageDescription": "This app may access your photo library to select images for profile or content sharing.",
+        "NSMicrophoneUsageDescription": "This app may use the microphone for voice features or content recording."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,9 +25,29 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
+      "edgeToEdgeEnabled": false,
       "predictiveBackGestureEnabled": false,
-      "package": "com.runnel.ailms"
+      "package": "com.runnel.ailms",
+      "navigationBarColor": "#EEEFF4",
+      "softwareKeyboardLayoutMode": "adjustResize",
+      "enableProguardInReleaseBuilds": true,
+      "enableSeparateBuildPerCPUArchitecture": true,
+      "universalApk": false,
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "ACCESS_WIFI_STATE",
+        "READ_EXTERNAL_STORAGE",
+        "WAKE_LOCK",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
+        "READ_MEDIA_AUDIO"
+      ],
+      "blockedPermissions": [
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "output": "static",

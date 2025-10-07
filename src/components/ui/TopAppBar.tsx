@@ -36,7 +36,6 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                 accessibilityRole="button"
               >
                 <IconSymbol name="chevron.left" size={24} color={colors.primary} />
-                <Text>Back</Text>
               </TouchableOpacity>
             )}
             {showLogo && !showBackButton && (

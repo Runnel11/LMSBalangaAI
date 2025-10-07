@@ -265,6 +265,10 @@ export class OfflineManager {
     try {
       // Always save locally first
       await saveProgress(lessonId, quizId, score, isCompleted);
+      logger.offline.syncComplete(1);
+
+      // Notify subscribers so UI can update immediately
+      this.notifySubscribers();
 
       if (networkService.isOnline) {
         // Try to sync immediately if online (write-through)
@@ -278,10 +282,10 @@ export class OfflineManager {
               is_completed: !!isCompleted,
               score,
             });
+            logger.offline.syncComplete(1);
           } else {
             // If no user scope, do not queue a server sync item; keep local only
           }
-            logger.offline.syncComplete(1);
         } catch (syncError) {
             logger.offline.syncError('Online write-through failed, queued for retry');
           await this.queueForSync('saveProgress', {

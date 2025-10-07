@@ -18,7 +18,25 @@ if (Platform.OS === 'web') {
   // Mobile implementation
   const FileSystem = require('expo-file-system');
   const { updateLessonDownloadStatus, getLessonById, getLessonsByLevel, getAllLevels } = require('../db/index');
-  const { logger } = require('../utils/logger');
+  let logger;
+  try {
+    logger = require('../utils/logger').logger;
+  } catch (e) {
+    // Fallback logger if import fails
+    logger = {
+      download: {
+        completed: (id, size) => console.log(`Download completed: ${id}, size: ${size}`),
+        failed: (id, error) => console.error(`Download failed: ${id}, error: ${error}`),
+        started: (id) => console.log(`Download started: ${id}`)
+      },
+      db: {
+        error: (op, error) => console.error(`DB error in ${op}: ${error}`)
+      },
+      offline: {
+        syncError: (error) => console.error(`Offline sync error: ${error}`)
+      }
+    };
+  }
 
   const DOWNLOAD_DIR = FileSystem.documentDirectory + 'lessons/';
 
@@ -240,19 +258,22 @@ if (Platform.OS === 'web') {
     try {
       // Use the new networkService for better connectivity detection
       const { networkService } = require('./networkService');
-      const status = await networkService.getNetworkStatus();
-      return status.isConnected;
-    } catch (error) {
-      // Fallback to simple fetch test
-      try {
-        const response = await fetch('https://www.google.com', {
-          method: 'HEAD',
-          timeout: 5000
-        });
-        return response.ok;
-      } catch (fetchError) {
-        return false;
+      if (networkService && networkService.getNetworkStatus) {
+        const status = await networkService.getNetworkStatus();
+        return status.isConnected;
       }
+    } catch (error) {
+      // Fallback to simple connectivity check
+    }
+
+    // Fallback: simple connectivity check
+    try {
+      const response = await fetch('https://www.google.com', {
+        method: 'HEAD'
+      });
+      return response.ok;
+    } catch (fetchError) {
+      return false;
     }
   };
 

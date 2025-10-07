@@ -393,10 +393,12 @@ const styles = StyleSheet.create<{
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     padding: spacing.lg,
+    paddingVertical: spacing.xl,
     borderWidth: 2,
     borderColor: colors.border,
-    minHeight: 44,
+    minHeight: 60,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   selectedOption: {
     backgroundColor: colors.primary,
@@ -406,6 +408,9 @@ const styles = StyleSheet.create<{
     ...(typography.body1 as any),
     color: colors.textPrimary,
     textAlign: 'center',
+    lineHeight: 22,
+    flexWrap: 'wrap',
+    textAlignVertical: 'center',
   },
   selectedOptionText: {
     color: colors.background,
