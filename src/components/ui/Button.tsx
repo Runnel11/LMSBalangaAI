@@ -72,22 +72,23 @@ export const Button: React.FC<ButtonProps> = ({
       justifyContent: 'center',
       minHeight: 44,
       flexDirection: 'row',
+      overflow: 'visible',
     };
 
     const sizeStyles: Record<'small' | 'medium' | 'large', ViewStyle> = {
       small: { 
-        paddingHorizontal: spacing.md, 
-        paddingVertical: spacing.sm,
+        paddingHorizontal: 10, 
+        paddingVertical: 10,
         minHeight: 36,
       },
       medium: { 
-        paddingHorizontal: spacing.lg, 
-        paddingVertical: spacing.md,
+        paddingHorizontal: 10, 
+        paddingVertical: 10,
         minHeight: 44,
       },
       large: { 
-        paddingHorizontal: spacing.xl, 
-        paddingVertical: spacing.lg,
+        paddingHorizontal: 10, 
+        paddingVertical: 10,
         minHeight: 52,
       },
     };
@@ -187,7 +188,13 @@ export const Button: React.FC<ButtonProps> = ({
             style={{ marginRight: spacing.sm }}
           />
         )}
-        <Text style={[getTextStyle(), textStyle]}>{title}</Text>
+        <Text
+          style={[getTextStyle(), { paddingVertical: 2, includeFontPadding: false }, textStyle]}
+          // Allow wrapping and normal font scaling so labels don't get squeezed by vertical padding
+          allowFontScaling={true}
+        >
+          {title}
+        </Text>
       </TouchableOpacity>
     </Animated.View>
   );

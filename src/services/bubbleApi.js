@@ -183,7 +183,17 @@ export class BubbleApiService {
           const text = await res.text();
           throw new Error(`PATCH user_progress failed: HTTP ${res.status} ${text}`);
         }
-        return await res.json();
+        // Some endpoints may return an empty body (204). Safely handle empty responses.
+        {
+          const text = await res.text();
+          if (!text || text.trim() === '') return {};
+          try {
+            return JSON.parse(text);
+          } catch (parseErr) {
+            // Return raw text if JSON parsing fails
+            return { responseText: text };
+          }
+        }
       }
 
       // 2) Create new
@@ -196,7 +206,16 @@ export class BubbleApiService {
         const text = await res.text();
         throw new Error(`POST user_progress failed: HTTP ${res.status} ${text}`);
       }
-      return await res.json();
+      // Safely handle possibly empty response bodies
+      {
+        const text = await res.text();
+        if (!text || text.trim() === '') return {};
+        try {
+          return JSON.parse(text);
+        } catch (parseErr) {
+          return { responseText: text };
+        }
+      }
     } catch (err) {
       logger.api.error('Bubble upsertProgress', err.message);
       throw err;

@@ -82,7 +82,10 @@ export default function LessonScreen() {
   const handleDownloadLesson = async () => {
     if (!lesson || downloading) return;
 
+    console.log('[DEBUG] Starting download for lesson:', lesson.id);
     const networkAvailable = await downloadManager.isNetworkAvailable();
+    console.log('[DEBUG] Network available:', networkAvailable);
+
     if (!networkAvailable) {
       Alert.alert('No Internet', 'Please connect to the internet to download lessons.');
       return;
@@ -91,15 +94,18 @@ export default function LessonScreen() {
     setDownloading(true);
     try {
       const result = await downloadManager.downloadLesson(lesson);
+      console.log('[DEBUG] Download result:', result);
+
       if (result.success) {
         Alert.alert('Downloaded', 'Lesson has been downloaded for offline access.');
         await loadLessonData();
       } else {
-        Alert.alert('Download Failed', result.message || 'Failed to download lesson.');
+        const errorMsg = result.error ? `${result.message}\n\nError: ${result.error}` : result.message;
+        Alert.alert('Download Failed', errorMsg || 'Failed to download lesson.');
       }
     } catch (error) {
-      console.error('Error downloading lesson:', error);
-      Alert.alert('Download Error', 'An error occurred while downloading the lesson.');
+      console.error('[ERROR] Error downloading lesson:', error);
+      Alert.alert('Download Error', `An error occurred while downloading the lesson.\n\nError: ${(error as any)?.message || error}`);
     } finally {
       setDownloading(false);
     }

@@ -4,24 +4,128 @@ import { logger } from '../utils/logger';
 
 let db = null;
 
+// ---------- Normalizers: Convert Bubble shapes to safe SQL values ----------
+const normalizeLevel = (bubbleLevel) => {
+  if (!bubbleLevel || !bubbleLevel._id) {
+    throw new Error('Invalid level data');
+  }
+  const orderIndex = Number(bubbleLevel.order_index);
+  return {
+    id: String(bubbleLevel._id),
+    title: String(bubbleLevel.title || ''),
+    description: String(bubbleLevel.description || ''),
+    order_index: Number.isFinite(orderIndex) ? orderIndex : 0,
+    created_at: String(bubbleLevel.Created_Date || new Date().toISOString())
+  };
+};
+
+const normalizeLesson = (bubbleLesson) => {
+  if (!bubbleLesson || !bubbleLesson._id) {
+    throw new Error('Invalid lesson data');
+  }
+  const levelId = bubbleLesson.level_id?._id || bubbleLesson.level_id;
+  if (!levelId) {
+    throw new Error(`Lesson "${bubbleLesson.title}" missing level_id`);
+  }
+  const orderIndex = Number(bubbleLesson.order_index);
+  const duration = Number(bubbleLesson.estimated_duration);
+  return {
+    id: String(bubbleLesson._id),
+    level_id: String(levelId),
+    title: String(bubbleLesson.title || ''),
+    description: String(bubbleLesson.description || ''),
+    content: String(bubbleLesson.content || ''),
+    download_url: String(bubbleLesson.download_url || ''),
+    order_index: Number.isFinite(orderIndex) ? orderIndex : 0,
+    estimated_duration: Number.isFinite(duration) ? duration : 30,
+    created_at: String(bubbleLesson.Created_Date || new Date().toISOString())
+  };
+};
+
+const normalizeQuiz = (bubbleQuiz) => {
+  if (!bubbleQuiz || !bubbleQuiz._id) {
+    throw new Error('Invalid quiz data');
+  }
+  const lessonId = bubbleQuiz.lesson_id?._id || bubbleQuiz.lesson_id;
+  if (!lessonId) {
+    throw new Error(`Quiz "${bubbleQuiz.title}" missing lesson_id`);
+  }
+  const questionsStr = typeof bubbleQuiz.questions === 'string'
+    ? bubbleQuiz.questions
+    : JSON.stringify(bubbleQuiz.questions || []);
+  return {
+    id: String(bubbleQuiz._id),
+    lesson_id: String(lessonId),
+    title: String(bubbleQuiz.title || ''),
+    questions: String(questionsStr),
+    created_at: String(bubbleQuiz.Created_Date || new Date().toISOString())
+  };
+};
+
+const normalizeJob = (bubbleJob) => {
+  if (!bubbleJob || !bubbleJob._id) {
+    throw new Error('Invalid job data');
+  }
+  const requiredLevel = bubbleJob.required_level?._id || bubbleJob.required_level;
+  return {
+    id: String(bubbleJob._id),
+    title: String(bubbleJob.title || ''),
+    company: String(bubbleJob.company || ''),
+    description: String(bubbleJob.description || ''),
+    requirements: String(bubbleJob.requirements || ''),
+    salary_range: String(bubbleJob.salary_range || ''),
+    location: String(bubbleJob.location || ''),
+    required_level: requiredLevel ? String(requiredLevel) : null,
+    is_active: bubbleJob.is_active !== false ? 1 : 0,
+    created_at: String(bubbleJob.Created_Date || new Date().toISOString())
+  };
+};
+
+const DB_VERSION = 2; // Increment this when schema changes
+
 export const initDB = async () => {
   try {
     db = await SQLite.openDatabaseAsync('balangaai.db');
-    
+
+    // Check current schema version
+    let currentVersion = 0;
+    try {
+      const versionResult = await db.getFirstAsync('PRAGMA user_version');
+      currentVersion = versionResult?.user_version || 0;
+    } catch (e) {
+      // Database might be new
+    }
+
+    // If schema version changed, drop all tables and recreate
+    if (currentVersion !== DB_VERSION) {
+      logger.db.query('migration', `Migrating database from v${currentVersion} to v${DB_VERSION}`);
+
+      await db.execAsync(`
+        DROP TABLE IF EXISTS user_downloads;
+        DROP TABLE IF EXISTS user_progress;
+        DROP TABLE IF EXISTS jobs;
+        DROP TABLE IF EXISTS quizzes;
+        DROP TABLE IF EXISTS lessons;
+        DROP TABLE IF EXISTS levels;
+        DROP TABLE IF EXISTS users;
+      `);
+    }
+
     await db.execAsync(`
       PRAGMA journal_mode = WAL;
-      
+      PRAGMA user_version = ${DB_VERSION};
+
       CREATE TABLE IF NOT EXISTS levels (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
         description TEXT,
         order_index INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
-      
+
       CREATE TABLE IF NOT EXISTS lessons (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        level_id INTEGER,
+        id TEXT PRIMARY KEY,
+        level_id TEXT,
         title TEXT NOT NULL,
         description TEXT,
         content TEXT,
@@ -33,21 +137,21 @@ export const initDB = async () => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (level_id) REFERENCES levels (id)
       );
-      
+
       CREATE TABLE IF NOT EXISTS quizzes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        lesson_id INTEGER,
+        id TEXT PRIMARY KEY,
+        lesson_id TEXT,
         title TEXT NOT NULL,
         questions TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (lesson_id) REFERENCES lessons (id)
       );
-      
+
       CREATE TABLE IF NOT EXISTS user_progress (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
-        lesson_id INTEGER,
-        quiz_id INTEGER,
+        lesson_id TEXT,
+        quiz_id TEXT,
         is_completed BOOLEAN DEFAULT 0,
         score INTEGER,
         completed_at DATETIME,
@@ -57,16 +161,16 @@ export const initDB = async () => {
         FOREIGN KEY (quiz_id) REFERENCES quizzes (id),
         UNIQUE(user_id, lesson_id, quiz_id)
       );
-      
+
       CREATE TABLE IF NOT EXISTS jobs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
         company TEXT,
         description TEXT,
         requirements TEXT,
         salary_range TEXT,
         location TEXT,
-        required_level INTEGER,
+        required_level TEXT,
         is_active BOOLEAN DEFAULT 1,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (required_level) REFERENCES levels (id)
@@ -86,7 +190,7 @@ export const initDB = async () => {
       CREATE TABLE IF NOT EXISTS user_downloads (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
-        lesson_id INTEGER NOT NULL,
+        lesson_id TEXT NOT NULL,
         local_file_path TEXT,
         is_downloaded BOOLEAN DEFAULT 0,
         downloaded_at DATETIME,
@@ -451,87 +555,91 @@ export const repairProgressData = async (userId) => {
 // Functions for inserting content from Bubble
 export const insertLevelFromBubble = async (bubbleLevel) => {
   try {
+    if (!db) throw new Error('Database not initialized');
+    const normalized = normalizeLevel(bubbleLevel);
+
     await db.runAsync(
       `INSERT OR REPLACE INTO levels (id, title, description, order_index, created_at)
        VALUES (?, ?, ?, ?, ?)`,
-      [
-        bubbleLevel._id,
-        bubbleLevel.title,
-        bubbleLevel.description,
-        bubbleLevel.order_index || 0,
-        bubbleLevel.Created_Date || new Date().toISOString()
-      ]
+      [normalized.id, normalized.title, normalized.description, normalized.order_index, normalized.created_at]
     );
-    if (__DEV__) logger.db.query('insert_level', 'levels');
+    if (__DEV__) logger.db.query('insert_level', `${normalized.title}`);
   } catch (error) {
     logger.db.error('insert_level_from_bubble', String(error));
+    throw error;
   }
 };
 
 export const insertLessonFromBubble = async (bubbleLesson) => {
   try {
+    if (!db) throw new Error('Database not initialized');
+    const normalized = normalizeLesson(bubbleLesson);
+
     await db.runAsync(
       `INSERT OR REPLACE INTO lessons
        (id, level_id, title, description, content, download_url, order_index, estimated_duration, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        bubbleLesson._id,
-        bubbleLesson.level_id._id || bubbleLesson.level_id,
-        bubbleLesson.title,
-        bubbleLesson.description,
-        bubbleLesson.content,
-        bubbleLesson.download_url,
-        bubbleLesson.order_index || 0,
-        bubbleLesson.estimated_duration || 30,
-        bubbleLesson.Created_Date || new Date().toISOString()
+        normalized.id,
+        normalized.level_id,
+        normalized.title,
+        normalized.description,
+        normalized.content,
+        normalized.download_url,
+        normalized.order_index,
+        normalized.estimated_duration,
+        normalized.created_at
       ]
     );
-    if (__DEV__) logger.db.query('insert_lesson', 'lessons');
+    if (__DEV__) logger.db.query('insert_lesson', `${normalized.title}`);
   } catch (error) {
     logger.db.error('insert_lesson_from_bubble', String(error));
+    throw error;
   }
 };
 
 export const insertQuizFromBubble = async (bubbleQuiz) => {
   try {
+    if (!db) throw new Error('Database not initialized');
+    const normalized = normalizeQuiz(bubbleQuiz);
+
     await db.runAsync(
       `INSERT OR REPLACE INTO quizzes (id, lesson_id, title, questions, created_at)
        VALUES (?, ?, ?, ?, ?)`,
-      [
-        bubbleQuiz._id,
-        bubbleQuiz.lesson_id._id || bubbleQuiz.lesson_id,
-        bubbleQuiz.title,
-        typeof bubbleQuiz.questions === 'string' ? bubbleQuiz.questions : JSON.stringify(bubbleQuiz.questions),
-        bubbleQuiz.Created_Date || new Date().toISOString()
-      ]
+      [normalized.id, normalized.lesson_id, normalized.title, normalized.questions, normalized.created_at]
     );
-    if (__DEV__) logger.db.query('insert_quiz', 'quizzes');
+    if (__DEV__) logger.db.query('insert_quiz', `${normalized.title}`);
   } catch (error) {
     logger.db.error('insert_quiz_from_bubble', String(error));
+    throw error;
   }
 };
 
 export const insertJobFromBubble = async (bubbleJob) => {
   try {
+    if (!db) throw new Error('Database not initialized');
+    const normalized = normalizeJob(bubbleJob);
+
     await db.runAsync(
       `INSERT OR REPLACE INTO jobs
        (id, title, company, description, requirements, salary_range, location, required_level, is_active, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        bubbleJob._id,
-        bubbleJob.title,
-        bubbleJob.company,
-        bubbleJob.description,
-        bubbleJob.requirements,
-        bubbleJob.salary_range,
-        bubbleJob.location,
-        bubbleJob.required_level._id || bubbleJob.required_level,
-        bubbleJob.is_active !== false ? 1 : 0,
-        bubbleJob.Created_Date || new Date().toISOString()
+        normalized.id,
+        normalized.title,
+        normalized.company,
+        normalized.description,
+        normalized.requirements,
+        normalized.salary_range,
+        normalized.location,
+        normalized.required_level,
+        normalized.is_active,
+        normalized.created_at
       ]
     );
-    if (__DEV__) logger.db.query('insert_job', 'jobs');
+    if (__DEV__) logger.db.query('insert_job', `${normalized.title}`);
   } catch (error) {
     logger.db.error('insert_job_from_bubble', String(error));
+    throw error;
   }
 };

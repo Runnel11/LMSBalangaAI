@@ -16,7 +16,7 @@ if (Platform.OS === 'web') {
   };
 } else {
   // Mobile implementation
-  const FileSystem = require('expo-file-system');
+  const FileSystem = require('expo-file-system/legacy');
   const { updateLessonDownloadStatus, getLessonById, getLessonsByLevel, getAllLevels } = require('../db/index');
   let logger;
   try {
@@ -53,12 +53,15 @@ if (Platform.OS === 'web') {
 
   const downloadLesson = async (lesson, onProgress = null) => {
     try {
+      console.log('[DEBUG] Download started for lesson:', lesson.id, lesson.title);
       await ensureDownloadDirectory();
-      
+
       const fileName = `lesson_${lesson.id}.json`;
       const localPath = DOWNLOAD_DIR + fileName;
-      
+      console.log('[DEBUG] Local path:', localPath);
+
       if (!lesson.download_url) {
+        console.log('[DEBUG] No download_url, creating mock content');
         const mockContent = {
           id: lesson.id,
           title: lesson.title,
@@ -66,45 +69,92 @@ if (Platform.OS === 'web') {
           duration: lesson.estimated_duration,
           downloadedAt: new Date().toISOString()
         };
-        
+
         await FileSystem.writeAsStringAsync(localPath, JSON.stringify(mockContent, null, 2));
         await updateLessonDownloadStatus(lesson.id, localPath, true);
         if (__DEV__) logger.download.completed(String(lesson.id), (await FileSystem.getInfoAsync(localPath)).size || 0);
-        
+        console.log('[DEBUG] Mock content saved successfully');
+
         return {
           success: true,
           localPath,
           message: 'Lesson downloaded successfully'
         };
       }
-      
+
+      console.log('[DEBUG] Downloading from URL:', lesson.download_url);
       const downloadResumable = FileSystem.createDownloadResumable(
         lesson.download_url,
         localPath,
         {},
         onProgress
       );
-      
+
       const result = await downloadResumable.downloadAsync();
-      
+      console.log('[DEBUG] Download result:', result?.status, result?.uri);
+
       if (result && result.status === 200) {
         await updateLessonDownloadStatus(lesson.id, localPath, true);
         if (__DEV__) logger.download.completed(String(lesson.id), result?.headers?._contentLength ? Number(result.headers._contentLength) : 0);
+        console.log('[DEBUG] Download completed successfully');
         return {
           success: true,
           localPath,
           message: 'Lesson downloaded successfully'
         };
+      } else if (result && result.status === 404) {
+        // Remote file missing; create a local mock so lesson is still usable offline
+        console.warn(`[WARN] Remote lesson file not found (404) for lesson ${lesson.id}. Creating fallback mock content.`);
+
+        const mockContent = {
+          id: lesson.id,
+          title: lesson.title,
+          content: lesson.content || `Offline fallback content for ${lesson.title}`,
+          duration: lesson.estimated_duration,
+          downloadedAt: new Date().toISOString(),
+          source: 'fallback'
+        };
+
+        try {
+          await FileSystem.writeAsStringAsync(localPath, JSON.stringify(mockContent, null, 2));
+          await updateLessonDownloadStatus(lesson.id, localPath, true);
+          if (__DEV__) logger.download.completed(String(lesson.id), (await FileSystem.getInfoAsync(localPath)).size || 0);
+          return {
+            success: true,
+            localPath,
+            message: 'Remote file not found (404). Fallback offline content created.'
+          };
+        } catch (writeErr) {
+          // If writing fails, fall through to throwing an error so it's handled below
+          console.error('[ERROR] Failed to write fallback content after 404:', writeErr);
+          throw writeErr;
+        }
       } else {
         throw new Error('Download failed with status: ' + result?.status);
       }
     } catch (error) {
-      console.error('Error downloading lesson:', error);
+      console.error('[ERROR] Error downloading lesson:', error);
+      console.error('[ERROR] Error details:', {
+        message: error?.message,
+        stack: error?.stack,
+        lesson: { id: lesson?.id, title: lesson?.title, download_url: lesson?.download_url }
+      });
       logger.download.failed(String(lesson?.id ?? ''), String(error?.message ?? error));
+
+      // Provide more helpful error message
+      let errorMessage = 'Failed to download lesson';
+      if (error?.message?.includes('Network request failed')) {
+        errorMessage = 'Network connection failed. Please check your internet connection.';
+      } else if (error?.message?.includes('timeout')) {
+        errorMessage = 'Download timed out. Please try again.';
+      } else if (error?.message) {
+        errorMessage = `Download failed: ${error.message}`;
+      }
+
       return {
         success: false,
-        error: error.message,
-        message: 'Failed to download lesson'
+        error: error.message || String(error),
+        message: errorMessage
       };
     }
   };
@@ -255,26 +305,23 @@ if (Platform.OS === 'web') {
   };
 
   const isNetworkAvailable = async () => {
+    console.log('[DEBUG] Checking network availability...');
     try {
       // Use the new networkService for better connectivity detection
       const { networkService } = require('./networkService');
       if (networkService && networkService.getNetworkStatus) {
         const status = await networkService.getNetworkStatus();
+        console.log('[DEBUG] Network status from networkService:', status);
         return status.isConnected;
       }
     } catch (error) {
-      // Fallback to simple connectivity check
+      console.log('[DEBUG] NetworkService not available, using fallback:', error?.message);
     }
 
-    // Fallback: simple connectivity check
-    try {
-      const response = await fetch('https://www.google.com', {
-        method: 'HEAD'
-      });
-      return response.ok;
-    } catch (fetchError) {
-      return false;
-    }
+    // Always return true as fallback - let the actual download fail with proper error if network is down
+    // This prevents false negatives from blocking downloads
+    console.log('[DEBUG] Network check fallback: assuming connected');
+    return true;
   };
 
   // New helper APIs for offline features

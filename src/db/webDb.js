@@ -408,18 +408,115 @@ export const getLevelProgress = async (levelId) => {
   const data = getWebData();
   const levelLessons = data.lessons.filter(l => l.level_id === levelId);
   const completedLessonIds = new Set();
-  
+
   data.progress.forEach(p => {
     if (p.is_completed === 1) {
       completedLessonIds.add(p.lesson_id);
     }
   });
-  
+
   const completedCount = levelLessons.filter(l => completedLessonIds.has(l.id)).length;
-  
+
   return {
     total: levelLessons.length,
     completed: completedCount,
     percentage: levelLessons.length > 0 ? Math.round((completedCount / levelLessons.length) * 100) : 0
   };
+};
+
+// Functions for inserting content from Bubble (web implementation)
+export const insertLevelFromBubble = async (bubbleLevel) => {
+  try {
+    if (!bubbleLevel || !bubbleLevel._id) {
+      throw new Error('Invalid level data');
+    }
+    const data = getWebData();
+    const normalized = normalizeLevels([bubbleLevel])[0];
+
+    // Find and replace or append
+    const existingIndex = data.levels.findIndex(l => String(l.id) === String(normalized.id));
+    if (existingIndex >= 0) {
+      data.levels[existingIndex] = normalized;
+    } else {
+      data.levels.push(normalized);
+    }
+
+    setWebData(data);
+    if (__DEV__) logger.db.query('insert_level', `${bubbleLevel.title}`);
+  } catch (error) {
+    logger.db.error('insert_level_from_bubble', String(error));
+    throw error;
+  }
+};
+
+export const insertLessonFromBubble = async (bubbleLesson) => {
+  try {
+    if (!bubbleLesson || !bubbleLesson._id) {
+      throw new Error('Invalid lesson data');
+    }
+    const data = getWebData();
+    const normalized = normalizeLessons([bubbleLesson])[0];
+
+    // Find and replace or append
+    const existingIndex = data.lessons.findIndex(l => String(l.id) === String(normalized.id));
+    if (existingIndex >= 0) {
+      data.lessons[existingIndex] = normalized;
+    } else {
+      data.lessons.push(normalized);
+    }
+
+    setWebData(data);
+    if (__DEV__) logger.db.query('insert_lesson', `${bubbleLesson.title}`);
+  } catch (error) {
+    logger.db.error('insert_lesson_from_bubble', String(error));
+    throw error;
+  }
+};
+
+export const insertQuizFromBubble = async (bubbleQuiz) => {
+  try {
+    if (!bubbleQuiz || !bubbleQuiz._id) {
+      throw new Error('Invalid quiz data');
+    }
+    const data = getWebData();
+    const normalized = normalizeQuizzes([bubbleQuiz])[0];
+
+    // Find and replace or append
+    const existingIndex = data.quizzes.findIndex(q => String(q.id) === String(normalized.id));
+    if (existingIndex >= 0) {
+      data.quizzes[existingIndex] = normalized;
+    } else {
+      data.quizzes.push(normalized);
+    }
+
+    setWebData(data);
+    if (__DEV__) logger.db.query('insert_quiz', `${bubbleQuiz.title}`);
+  } catch (error) {
+    logger.db.error('insert_quiz_from_bubble', String(error));
+    throw error;
+  }
+};
+
+export const insertJobFromBubble = async (bubbleJob) => {
+  try {
+    if (!bubbleJob || !bubbleJob._id) {
+      throw new Error('Invalid job data');
+    }
+    const data = getWebData();
+    const normalized = normalizeJobs([bubbleJob])[0];
+
+    // Find and replace or append
+    const existingIndex = data.jobs.findIndex(j => String(j.id) === String(normalized.id));
+    if (existingIndex >= 0) {
+      data.jobs[existingIndex] = normalized;
+    } else {
+      data.jobs.push(normalized);
+    }
+
+    setWebData(data);
+    if (__DEV__) logger.db.query('insert_job', `${bubbleJob.title}`);
+  } catch (error) {
+    logger.db.error('insert_job_from_bubble', String(error));
+    throw error;
+  }
 };

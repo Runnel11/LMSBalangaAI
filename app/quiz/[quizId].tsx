@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextStyle, TouchableOpacity, View, ViewStyle } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/src/components/ui/Button';
 import { ProgressBar } from '@/src/components/ui/ProgressBar';
@@ -141,6 +141,8 @@ export default function QuizScreen() {
     router.back();
   };
 
+  const insets = useSafeAreaInsets();
+
   if (loading) {
     return (
   <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -179,7 +181,7 @@ export default function QuizScreen() {
           showBackButton
           onBackPress={() => router.back()}
         />
-  <ScrollView style={styles.content}>
+  <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <View style={styles.resultsContainer as any}>
             <Text style={styles.resultsTitle}>Quiz Completed!</Text>
             <Text style={styles.scoreText}>Your Score: {score}%</Text>
@@ -210,7 +212,7 @@ export default function QuizScreen() {
               ))}
             </View>
 
-            <View style={styles.resultsActions}>
+            <View style={[styles.resultsActions, { paddingBottom: Math.max(insets.bottom, 16) }]}>
               <Button
                 title="Retake Quiz"
                 onPress={handleRetakeQuiz}
@@ -250,7 +252,7 @@ export default function QuizScreen() {
           <ProgressBar progress={progress} style={styles.progressBar} />
         </View>
 
-        <ScrollView style={styles.questionContainer}>
+        <ScrollView contentContainerStyle={[styles.questionContainer, { paddingBottom: Math.max(insets.bottom + 8, 24) }]}>
           <Text style={styles.questionText}>{currentQuestion.question}</Text>
           
           <View style={styles.optionsContainer}>
@@ -276,21 +278,21 @@ export default function QuizScreen() {
           </View>
         </ScrollView>
 
-        <View style={styles.navigationSection}>
+        <View style={[styles.navigationSection, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <View style={styles.navigationButtons}>
             <Button
               title="Previous"
               onPress={handlePreviousQuestion}
-              variant="tertiary"
+              variant="secondary"
               disabled={currentQuestionIndex === 0}
-              style={[styles.navButton, { opacity: currentQuestionIndex === 0 ? 0.5 : 1 }]}
+              style={styles.navButton}
             />
-            
+
             <Button
               title={isLastQuestion ? 'Submit Quiz' : 'Next'}
               onPress={handleNextQuestion}
               disabled={!hasSelectedAnswer}
-              style={[styles.navButton, { opacity: hasSelectedAnswer ? 1 : 0.5 }]}
+              style={styles.navButton}
             />
           </View>
         </View>
@@ -428,6 +430,7 @@ const styles = StyleSheet.create<{
   },
   navButton: {
     flex: 1,
+    minWidth: 100,
   },
   resultsContainer: {
     padding: spacing.lg,

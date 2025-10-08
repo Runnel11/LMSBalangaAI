@@ -1,0 +1,51 @@
+Name: YooPhone
+CPU/ABI: x86_64
+Path: C:\Users\Yoonet-Rodenair\.android\avd\YooPhone.avd
+Target: google_apis_playstore [Google Play] (API level 36)
+Skin: 1080x2400
+SD Card: 512M
+AvdId: YooPhone
+PlayStore.enabled: true
+avd.ini.displayname: YooPhone
+avd.ini.encoding: UTF-8
+disk.dataPartition.size: 6442450944
+fastboot.chosenSnapshotFile: 
+fastboot.forceChosenSnapshotBoot: no
+fastboot.forceColdBoot: no
+fastboot.forceFastBoot: yes
+hw.accelerometer: yes
+hw.arc: false
+hw.audioInput: yes
+hw.battery: yes
+hw.camera.back: virtualscene
+hw.camera.front: emulated
+hw.cpu.ncore: 4
+hw.dPad: no
+hw.device.hash2: MD5:3db3250dab5d0d93b29353040181c7e9
+hw.device.manufacturer: Generic
+hw.device.name: medium_phone
+hw.gps: yes
+hw.gpu.enabled: yes
+hw.gpu.mode: auto
+hw.initialOrientation: portrait
+hw.keyboard: yes
+hw.lcd.density: 420
+hw.lcd.height: 2400
+hw.lcd.width: 1080
+hw.mainKeys: no
+hw.ramSize: 2048
+hw.sdCard: yes
+hw.sensors.orientation: yes
+hw.sensors.proximity: yes
+hw.trackBall: no
+image.sysdir.1: system-images\android-36\google_apis_playstore\x86_64\
+runtime.network.latency: none
+runtime.network.speed: full
+showDeviceFrame: no
+skin.dynamic: yes
+skin.path.backup: _no_skin
+tag.display: Google Play
+tag.displaynames: Google Play
+tag.id: google_apis_playstore
+tag.ids: google_apis_playstore
+vm.heapSize: 256

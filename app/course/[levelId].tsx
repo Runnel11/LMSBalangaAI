@@ -108,40 +108,46 @@ export default function CourseLevelScreen() {
     if (downloading) return;
 
     const undownloadedLessons = lessons.filter((lesson: Lesson) => !lesson.is_downloaded);
-    
+
     if (undownloadedLessons.length === 0) {
       Alert.alert('Already Downloaded', 'All lessons in this level are already downloaded.');
       return;
     }
 
+    console.log('[DEBUG] Starting batch download for', undownloadedLessons.length, 'lessons');
     setDownloading(true);
-    
+
     try {
       const results = await downloadManager.downloadAllLessonsInLevel(
         undownloadedLessons,
         (progress: any) => {
-          console.log('Download progress:', progress);
+          console.log('[DEBUG] Download progress:', progress);
         },
         (lesson: Lesson, result: any) => {
-          console.log(`Lesson ${lesson.title} download:`, result.success ? 'Success' : 'Failed');
+          console.log(`[DEBUG] Lesson ${lesson.title} download:`, result.success ? 'Success' : 'Failed', result);
         }
       );
 
+      console.log('[DEBUG] All downloads completed:', results);
       const successCount = results.filter((r: any) => r.success).length;
       const failureCount = results.filter((r: any) => !r.success && !r.skipped).length;
+      const failedLessons = results.filter((r: any) => !r.success && !r.skipped);
 
       if (successCount > 0) {
-        Alert.alert(
-          'Download Complete',
-          `Successfully downloaded ${successCount} lesson(s).${failureCount > 0 ? ` ${failureCount} failed.` : ''}`
-        );
+        let message = `Successfully downloaded ${successCount} lesson(s).`;
+        if (failureCount > 0) {
+          message += `\n\n${failureCount} failed:\n${failedLessons.map((r: any) => `- ${r.message || r.error || 'Unknown error'}`).join('\n')}`;
+        }
+        Alert.alert('Download Complete', message);
         await loadLevelData(); // Refresh to show updated download status
       } else {
-        Alert.alert('Download Failed', 'Failed to download lessons. Please check your connection.');
+        const errorMessages = failedLessons.map((r: any) => r.message || r.error || 'Unknown error');
+        const uniqueErrors = [...new Set(errorMessages)].join('\n');
+        Alert.alert('Download Failed', `Failed to download lessons.\n\n${uniqueErrors}`);
       }
     } catch (error) {
-      console.error('Error downloading lessons:', error);
-      Alert.alert('Download Error', 'An error occurred while downloading lessons.');
+      console.error('[ERROR] Error downloading lessons:', error);
+      Alert.alert('Download Error', `An error occurred while downloading lessons.\n\nError: ${(error as any)?.message || error}`);
     } finally {
       setDownloading(false);
     }

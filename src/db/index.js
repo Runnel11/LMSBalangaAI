@@ -138,3 +138,24 @@ export const repairProgressData = async () => {
     return { updated: 0 };
   }
 };
+
+// Bubble sync functions
+export const insertLevelFromBubble = async (bubbleLevel) => {
+  const db = await initializeDBModule();
+  return db.insertLevelFromBubble(bubbleLevel);
+};
+
+export const insertLessonFromBubble = async (bubbleLesson) => {
+  const db = await initializeDBModule();
+  return db.insertLessonFromBubble(bubbleLesson);
+};
+
+export const insertQuizFromBubble = async (bubbleQuiz) => {
+  const db = await initializeDBModule();
+  return db.insertQuizFromBubble(bubbleQuiz);
+};
+
+export const insertJobFromBubble = async (bubbleJob) => {
+  const db = await initializeDBModule();
+  return db.insertJobFromBubble(bubbleJob);
+};
