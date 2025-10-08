@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "ai-lms",
-    "slug": "ai-lms",
+  "name": "BalangaAI",
+    "slug": "balanga-ai",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -19,6 +19,7 @@
       }
     },
     "android": {
+      "name": "BalangaAI",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
