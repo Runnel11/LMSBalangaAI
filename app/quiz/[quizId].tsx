@@ -7,7 +7,7 @@ import { Button } from '@/src/components/ui/Button';
 import { ProgressBar } from '@/src/components/ui/ProgressBar';
 import { TopAppBar } from '@/src/components/ui/TopAppBar';
 import { borderRadius, colors, spacing, typography } from '@/src/config/theme';
-import { getLessonById, getQuizById, getQuizByLessonId } from '@/src/db/index';
+import { getLessonById, getQuizById } from '@/src/db/index';
 import { offlineManager } from '@/src/services/offlineManager';
 import { logger } from '@/src/utils/logger';
 
@@ -22,6 +22,10 @@ interface QuizData {
   lesson_id: string | number;
   title: string;
   questions: Question[];
+}
+
+interface Lesson {
+  title?: string;
 }
 
 // Static sample quiz for fallback when Bubble data fails
@@ -61,7 +65,7 @@ const SAMPLE_QUIZ: QuizData = {
 export default function QuizScreen() {
   const { quizId } = useLocalSearchParams();
   const [quiz, setQuiz] = useState<QuizData | null>(null);
-  const [lesson, setLesson] = useState(null);
+  const [lesson, setLesson] = useState<Lesson | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<number[]>([]);
   const [showResults, setShowResults] = useState(false);
@@ -415,7 +419,11 @@ export default function QuizScreen() {
           <ProgressBar progress={progress} style={styles.progressBar} />
         </View>
 
-        <ScrollView contentContainerStyle={[styles.questionContainer, { paddingBottom: Math.max(insets.bottom + 8, 24) }]}>
+        <ScrollView
+          style={styles.questionScroll}
+          contentContainerStyle={[styles.questionContainer, { paddingBottom: Math.max(insets.bottom + 8, 24) }]}
+          keyboardShouldPersistTaps="handled"
+        >
           <Text style={styles.questionText}>{currentQuestion.question}</Text>
 
           <View style={styles.optionsContainer}>
@@ -441,7 +449,7 @@ export default function QuizScreen() {
           </View>
         </ScrollView>
 
-        <View style={[styles.navigationSection, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+  <View style={[styles.navigationSection, { paddingTop: 8, paddingBottom: Math.max(insets.bottom + 16, 24) }]}>
           <View style={styles.navigationButtons}>
             <Button
               title="Previous"
@@ -476,6 +484,7 @@ const styles = StyleSheet.create<{
   progressText: TextStyle; 
   progressBar: ViewStyle; 
   questionContainer: ViewStyle; 
+  questionScroll: ViewStyle; 
   questionText: TextStyle; 
   optionsContainer: ViewStyle; 
   optionButton: ViewStyle; 
@@ -541,8 +550,10 @@ const styles = StyleSheet.create<{
   progressBar: {
     height: 8,
   },
-  questionContainer: {
+  questionScroll: {
     flex: 1,
+  },
+  questionContainer: {
     padding: spacing.lg,
   },
   questionText: {
