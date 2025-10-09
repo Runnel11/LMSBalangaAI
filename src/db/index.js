@@ -52,6 +52,11 @@ export const getLessonById = async (lessonId) => {
   return db.getLessonById(lessonId);
 };
 
+export const getQuizById = async (quizId) => {
+  const db = await initializeDBModule();
+  return db.getQuizById(quizId);
+};
+
 export const getQuizByLessonId = async (lessonId) => {
   const db = await initializeDBModule();
   return db.getQuizByLessonId(lessonId);

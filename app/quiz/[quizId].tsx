@@ -7,7 +7,7 @@ import { Button } from '@/src/components/ui/Button';
 import { ProgressBar } from '@/src/components/ui/ProgressBar';
 import { TopAppBar } from '@/src/components/ui/TopAppBar';
 import { borderRadius, colors, spacing, typography } from '@/src/config/theme';
-import { getLessonById, getQuizByLessonId } from '@/src/db/index';
+import { getLessonById, getQuizById, getQuizByLessonId } from '@/src/db/index';
 import { offlineManager } from '@/src/services/offlineManager';
 import { logger } from '@/src/utils/logger';
 
@@ -24,6 +24,40 @@ interface QuizData {
   questions: Question[];
 }
 
+// Static sample quiz for fallback when Bubble data fails
+const SAMPLE_QUIZ: QuizData = {
+  id: 'sample-quiz',
+  lesson_id: 'sample-lesson',
+  title: 'AI Fundamentals Quiz (Demo)',
+  questions: [
+    {
+      question: 'What does AI stand for in the context of technology?',
+      options: ['Automated Intelligence', 'Artificial Intelligence', 'Advanced Interface', 'Algorithmic Innovation'],
+      correct: 1
+    },
+    {
+      question: 'Which of the following is a popular AI language model?',
+      options: ['GPT', 'HTML', 'SQL', 'CSS'],
+      correct: 0
+    },
+    {
+      question: 'What is machine learning?',
+      options: ['A type of computer hardware', 'A subset of AI that enables systems to learn from data', 'A programming language', 'A database management system'],
+      correct: 1
+    },
+    {
+      question: 'Which company developed ChatGPT?',
+      options: ['Google', 'Microsoft', 'OpenAI', 'Meta'],
+      correct: 2
+    },
+    {
+      question: 'What is the primary purpose of neural networks in AI?',
+      options: ['To store data', 'To mimic human brain function for pattern recognition', 'To create websites', 'To manage databases'],
+      correct: 1
+    }
+  ]
+};
+
 export default function QuizScreen() {
   const { quizId } = useLocalSearchParams();
   const [quiz, setQuiz] = useState<QuizData | null>(null);
@@ -38,18 +72,73 @@ export default function QuizScreen() {
     const timer = logger.startTimer('Load quiz data');
     try {
       setLoading(true);
-      logger.db.query('quiz', `Loading quiz data for quiz ID: ${quizId}`);
+      const quizIdStr = String(quizId);
+      logger.db.query('quiz', `Loading quiz data for quiz ID: ${quizIdStr} (type: ${typeof quizId})`);
+      console.log('[QUIZ DEBUG] Starting quiz load with ID:', quizIdStr, 'Original type:', typeof quizId);
 
       // Use the unified database interface
-  // Important: Bubble IDs are strings; do not coerce to Number()
-  const quizData = await getQuizByLessonId(String(quizId));
-      
+      // Important: Bubble IDs are strings; do not coerce to Number()
+      const quizData = await getQuizById(quizIdStr);
+      console.log('[QUIZ DEBUG] getQuizById returned:', quizData ? 'FOUND' : 'NULL', quizData ? JSON.stringify({id: quizData.id, title: quizData.title, lesson_id: quizData.lesson_id}) : 'N/A');
+
       if (quizData) {
+        console.log('[QUIZ DEBUG] Quiz data exists, loading lesson...');
         const lessonData = await getLessonById(quizData.lesson_id);
-        const parsedQuestions = typeof quizData.questions === 'string' 
-          ? JSON.parse(quizData.questions) 
-          : quizData.questions;
-        
+        console.log('[QUIZ DEBUG] Lesson loaded:', lessonData ? lessonData.title : 'NULL');
+
+        let parsedQuestions;
+        try {
+          parsedQuestions = typeof quizData.questions === 'string'
+            ? JSON.parse(quizData.questions)
+            : quizData.questions;
+          console.log('[QUIZ DEBUG] Parsed questions count:', parsedQuestions?.length || 0);
+
+          // Validate that we have a valid questions array
+          if (!Array.isArray(parsedQuestions) || parsedQuestions.length === 0) {
+            throw new Error(`Invalid questions data: ${parsedQuestions ? typeof parsedQuestions : 'null'}`);
+          }
+
+          // Validate each question structure
+          const invalidQuestions = parsedQuestions.filter((q, index) => {
+            const isValid = q &&
+              typeof q.question === 'string' &&
+              Array.isArray(q.options) &&
+              q.options.length > 0 &&
+              typeof q.correct === 'number' &&
+              q.correct >= 0 &&
+              q.correct < q.options.length;
+
+            if (!isValid) {
+              console.error(`[QUIZ DEBUG] Invalid question at index ${index}:`, JSON.stringify(q));
+            }
+            return !isValid;
+          });
+
+          if (invalidQuestions.length > 0) {
+            throw new Error(`Found ${invalidQuestions.length} invalid question(s) in quiz data`);
+          }
+        } catch (parseError) {
+          timer();
+          const errorMsg = `Failed to parse quiz questions: ${(parseError as any)?.message || parseError}`;
+          logger.db.error('quiz_parse', errorMsg);
+          console.error('[QUIZ DEBUG] Parse error:', parseError);
+          console.error('[QUIZ DEBUG] Raw questions data:', quizData.questions);
+
+          // Use sample quiz as fallback
+          console.log('[QUIZ DEBUG] Using sample quiz as fallback');
+          Alert.alert(
+            'Using Sample Quiz',
+            'The quiz data could not be loaded. Showing a sample quiz instead.',
+            [{ text: 'OK' }]
+          );
+
+          setQuiz(SAMPLE_QUIZ);
+          setLesson({ title: 'Sample Lesson' } as any);
+          setSelectedAnswers(new Array(SAMPLE_QUIZ.questions.length).fill(-1));
+          setLoading(false);
+          return;
+        }
+
         setQuiz({
           ...quizData,
           questions: parsedQuestions
@@ -61,13 +150,40 @@ export default function QuizScreen() {
         logger.db.query('quiz', `Quiz loaded: ${quizData.title || 'Unknown'}, ${parsedQuestions.length} questions, Lesson: ${lessonData?.title || 'Unknown'}`);
       } else {
         timer();
-        logger.db.error('quiz_load', `Quiz not found for ID: ${quizId}`);
+        const errorMsg = `Quiz not found for ID: ${quizIdStr}`;
+        logger.db.error('quiz_load', errorMsg);
+        console.error('[QUIZ DEBUG] ' + errorMsg);
+
+        // Use sample quiz as fallback
+        console.log('[QUIZ DEBUG] Quiz not found, using sample quiz as fallback');
+        Alert.alert(
+          'Using Sample Quiz',
+          'The requested quiz was not found. Showing a sample quiz instead.',
+          [{ text: 'OK' }]
+        );
+
+        setQuiz(SAMPLE_QUIZ);
+        setLesson({ title: 'Sample Lesson' } as any);
+        setSelectedAnswers(new Array(SAMPLE_QUIZ.questions.length).fill(-1));
       }
     } catch (error) {
       timer();
-  logger.db.error('quiz_load', `Failed to load quiz ${quizId}: ${(error as any)?.message || error}`);
-      console.error('Error loading quiz data:', error);
-      Alert.alert('Error', 'Failed to load quiz data.');
+      const errorMsg = `Failed to load quiz ${quizId}: ${(error as any)?.message || error}`;
+      logger.db.error('quiz_load', errorMsg);
+      console.error('[QUIZ DEBUG] Error:', error);
+      console.error('[QUIZ DEBUG] Error stack:', (error as any)?.stack);
+
+      // Use sample quiz as fallback for general errors
+      console.log('[QUIZ DEBUG] General error occurred, using sample quiz as fallback');
+      Alert.alert(
+        'Using Sample Quiz',
+        'An error occurred while loading the quiz. Showing a sample quiz instead.',
+        [{ text: 'OK' }]
+      );
+
+      setQuiz(SAMPLE_QUIZ);
+      setLesson({ title: 'Sample Lesson' } as any);
+      setSelectedAnswers(new Array(SAMPLE_QUIZ.questions.length).fill(-1));
     } finally {
       setLoading(false);
     }
@@ -105,7 +221,8 @@ export default function QuizScreen() {
     const timer = logger.startTimer('Submit quiz');
     let correctAnswers = 0;
     quiz.questions.forEach((question, index) => {
-      if (selectedAnswers[index] === question.correct) {
+      // Safety check for question validity
+      if (question && typeof question.correct === 'number' && selectedAnswers[index] === question.correct) {
         correctAnswers++;
       }
     });
@@ -115,6 +232,13 @@ export default function QuizScreen() {
     setShowResults(true);
 
     logger.db.query('quiz', `Quiz completed: ${correctAnswers}/${quiz.questions.length} correct (${finalScore}%)`);
+
+    // Don't save progress for sample quiz
+    if (quiz.id === 'sample-quiz') {
+      timer();
+      console.log('[QUIZ DEBUG] Sample quiz completed, not saving to database');
+      return;
+    }
 
     try {
   // Types in db may be narrower; cast to keep RN TS happy
@@ -158,7 +282,7 @@ export default function QuizScreen() {
     );
   }
 
-  if (!quiz) {
+  if (!quiz || !quiz.questions || quiz.questions.length === 0) {
     return (
   <SafeAreaView style={styles.container} edges={['bottom']}>
         <TopAppBar
@@ -167,7 +291,7 @@ export default function QuizScreen() {
           onBackPress={() => router.back()}
         />
   <View style={styles.errorContainer}>
-    <Text style={styles.errorText}>Quiz not found.</Text>
+    <Text style={styles.errorText}>Quiz not found or has no questions.</Text>
         </View>
       </SafeAreaView>
     );
@@ -188,28 +312,48 @@ export default function QuizScreen() {
             
             <View style={styles.scoreBreakdown}>
               <Text style={styles.breakdownText}>
-                {quiz.questions.filter((_, index) => selectedAnswers[index] === quiz.questions[index].correct).length} out of {quiz.questions.length} correct
+                {quiz.questions.filter((q, index) => q && selectedAnswers[index] === q.correct).length} out of {quiz.questions.length} correct
               </Text>
             </View>
 
             <View style={styles.resultsSummary}>
-              {quiz.questions.map((question, index) => (
-                <View key={index} style={styles.questionResult}>
-                  <Text style={styles.questionNumber}>Question {index + 1}</Text>
-                  <Text style={styles.questionText}>{question.question}</Text>
-                  <Text style={[
-                    styles.answerResult,
-                    selectedAnswers[index] === question.correct ? styles.correctAnswer : styles.incorrectAnswer
-                  ] as any}>
-                    Your answer: {question.options[selectedAnswers[index]]}
-                    {selectedAnswers[index] !== question.correct && (
-                      <>
-                        {'\n'}Correct answer: {question.options[question.correct]}
-                      </>
-                    )}
-                  </Text>
-                </View>
-              ))}
+              {quiz.questions.map((question, index) => {
+                // Safety check for each question
+                if (!question || !Array.isArray(question.options)) {
+                  return (
+                    <View key={index} style={styles.questionResult}>
+                      <Text style={styles.questionNumber}>Question {index + 1}</Text>
+                      <Text style={styles.errorText}>Question data unavailable</Text>
+                    </View>
+                  );
+                }
+
+                const userAnswer = selectedAnswers[index];
+                const userAnswerText = userAnswer >= 0 && userAnswer < question.options.length
+                  ? question.options[userAnswer]
+                  : 'No answer';
+                const correctAnswerText = question.correct >= 0 && question.correct < question.options.length
+                  ? question.options[question.correct]
+                  : 'Unknown';
+
+                return (
+                  <View key={index} style={styles.questionResult}>
+                    <Text style={styles.questionNumber}>Question {index + 1}</Text>
+                    <Text style={styles.questionText}>{question.question || 'Question unavailable'}</Text>
+                    <Text style={[
+                      styles.answerResult,
+                      userAnswer === question.correct ? styles.correctAnswer : styles.incorrectAnswer
+                    ] as any}>
+                      Your answer: {userAnswerText}
+                      {userAnswer !== question.correct && (
+                        <>
+                          {'\n'}Correct answer: {correctAnswerText}
+                        </>
+                      )}
+                    </Text>
+                  </View>
+                );
+              })}
             </View>
 
             <View style={[styles.resultsActions, { paddingBottom: Math.max(insets.bottom, 16) }]}>
@@ -232,6 +376,25 @@ export default function QuizScreen() {
   }
 
   const currentQuestion = quiz.questions[currentQuestionIndex];
+
+  // Safety check: if current question is invalid, show error
+  if (!currentQuestion || !currentQuestion.options || !Array.isArray(currentQuestion.options)) {
+    console.error('[QUIZ DEBUG] Invalid current question at index:', currentQuestionIndex);
+    console.error('[QUIZ DEBUG] Current question data:', currentQuestion);
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <TopAppBar
+          title="Quiz Error"
+          showBackButton
+          onBackPress={() => router.back()}
+        />
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Question data is corrupted. Please go back and try again.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const progress = ((currentQuestionIndex + 1) / quiz.questions.length) * 100;
   const isLastQuestion = currentQuestionIndex === quiz.questions.length - 1;
   const hasSelectedAnswer = selectedAnswers[currentQuestionIndex] !== -1;
@@ -239,11 +402,11 @@ export default function QuizScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <TopAppBar
-        title={quiz.title}
+        title={quiz.title || `Quiz for Lesson ${lesson?.title || 'Unknown'}`}
         showBackButton
         onBackPress={() => router.back()}
       />
-      
+
       <View style={styles.quizContainer}>
         <View style={styles.progressSection}>
           <Text style={styles.progressText}>
@@ -254,7 +417,7 @@ export default function QuizScreen() {
 
         <ScrollView contentContainerStyle={[styles.questionContainer, { paddingBottom: Math.max(insets.bottom + 8, 24) }]}>
           <Text style={styles.questionText}>{currentQuestion.question}</Text>
-          
+
           <View style={styles.optionsContainer}>
             {currentQuestion.options.map((option, index) => (
               <TouchableOpacity

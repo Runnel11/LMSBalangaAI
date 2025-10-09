@@ -1,6 +1,7 @@
 // Mobile-specific database implementation using expo-sqlite
 import * as SQLite from 'expo-sqlite';
 import { logger } from '../utils/logger';
+import { bubbleApi } from '../services/bubbleApi';
 
 let db = null;
 
@@ -304,9 +305,89 @@ export const getLessonById = async (lessonId) => {
   }
 };
 
+export const getQuizById = async (quizId) => {
+  try {
+    console.log('[DB DEBUG] getQuizById called with:', quizId, 'Type:', typeof quizId);
+    const result = await db.getFirstAsync('SELECT * FROM quizzes WHERE id = ?', [quizId]);
+    console.log('[DB DEBUG] getQuizById result:', result ? `FOUND - ID: ${result.id}, Title: ${result.title}` : 'NULL');
+
+    if (result) {
+      // If questions are an array of IDs, resolve them to full question objects
+      try {
+        const parsed = typeof result.questions === 'string' ? JSON.parse(result.questions) : result.questions;
+        if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
+          // Resolve each ID via Data API
+          console.log('[DB DEBUG] Resolving question IDs:', parsed);
+          const resolved = [];
+          for (const qid of parsed) {
+            try {
+              const q = await bubbleApi.getObjectById('question', qid);
+              // Normalize to UI shape
+              resolved.push({
+                question: q.question || '',
+                options: Array.isArray(q.options) ? q.options.map((o) => String(o).replace(/^"|"$/g, '')) : [],
+                correct: typeof q.correct === 'number' ? q.correct : 0,
+              });
+            } catch (e) {
+              console.error('[DB DEBUG] Failed to resolve question ID:', qid, e);
+              // Skip if cannot resolve
+            }
+          }
+          if (resolved.length > 0) {
+            console.log('[DB DEBUG] Successfully resolved', resolved.length, 'questions');
+            return { ...result, questions: JSON.stringify(resolved) };
+          }
+        }
+      } catch (parseError) {
+        console.error('[DB DEBUG] Error parsing/resolving questions:', parseError);
+      }
+    }
+
+    return result;
+  } catch (error) {
+    console.error('[DB DEBUG] getQuizById error:', error);
+    logger.db.error('get_quiz_by_id', String(error));
+    return null;
+  }
+};
+
 export const getQuizByLessonId = async (lessonId) => {
   try {
-    return await db.getFirstAsync('SELECT * FROM quizzes WHERE lesson_id = ?', [lessonId]);
+    const result = await db.getFirstAsync('SELECT * FROM quizzes WHERE lesson_id = ?', [lessonId]);
+
+    if (result) {
+      // If questions are an array of IDs, resolve them to full question objects
+      try {
+        const parsed = typeof result.questions === 'string' ? JSON.parse(result.questions) : result.questions;
+        if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
+          // Resolve each ID via Data API
+          console.log('[DB DEBUG] Resolving question IDs for lesson:', lessonId, parsed);
+          const resolved = [];
+          for (const qid of parsed) {
+            try {
+              const q = await bubbleApi.getObjectById('question', qid);
+              // Normalize to UI shape
+              resolved.push({
+                question: q.question || '',
+                options: Array.isArray(q.options) ? q.options.map((o) => String(o).replace(/^"|"$/g, '')) : [],
+                correct: typeof q.correct === 'number' ? q.correct : 0,
+              });
+            } catch (e) {
+              console.error('[DB DEBUG] Failed to resolve question ID:', qid, e);
+              // Skip if cannot resolve
+            }
+          }
+          if (resolved.length > 0) {
+            console.log('[DB DEBUG] Successfully resolved', resolved.length, 'questions');
+            return { ...result, questions: JSON.stringify(resolved) };
+          }
+        }
+      } catch (parseError) {
+        console.error('[DB DEBUG] Error parsing/resolving questions:', parseError);
+      }
+    }
+
+    return result;
   } catch (error) {
     logger.db.error('get_quiz', String(error));
     return null;

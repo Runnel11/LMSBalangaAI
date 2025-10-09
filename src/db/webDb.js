@@ -180,6 +180,55 @@ export const getLessonById = async (lessonId) => {
   return (lessons || []).find(lesson => String(lesson.id) === String(lessonId)) || null;
 };
 
+export const getQuizById = async (quizId) => {
+  // Get quiz by its ID
+  let data = getWebData();
+  data = ensureNormalized(data, 'quizzes');
+  let quizzes = data.quizzes;
+  if (!Array.isArray(quizzes) || quizzes.length === 0) {
+    quizzes = await fetchIfEmpty('quizzes', () => bubbleApi.listQuizzes?.(), normalizeQuizzes);
+  }
+  const match = Array.isArray(quizzes)
+    ? quizzes.find(q => String(q.id) === String(quizId))
+    : null;
+  if (match) {
+    // If questions are an array of IDs, resolve them to full question objects once
+    try {
+      const parsed = typeof match.questions === 'string' ? JSON.parse(match.questions) : match.questions;
+      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
+        // Resolve each ID via Data API
+        const resolved = [];
+        for (const qid of parsed) {
+          try {
+            const q = await bubbleApi.getObjectById('question', qid);
+            // Normalize to UI shape
+            resolved.push({
+              question: q.question || '',
+              options: Array.isArray(q.options) ? q.options.map((o) => String(o).replace(/^"|"$/g, '')) : [],
+              correct: typeof q.correct === 'number' ? q.correct : 0,
+            });
+          } catch (e) {
+            // Skip if cannot resolve
+          }
+        }
+        if (resolved.length > 0) {
+          const updated = { ...match, questions: JSON.stringify(resolved) };
+          // Persist back to cache so future loads are fast
+          const fresh = getWebData();
+          const idx = (fresh.quizzes || []).findIndex(q => String(q.id) === String(match.id));
+          if (idx >= 0) {
+            fresh.quizzes[idx] = updated;
+            setWebData(fresh);
+          }
+          return updated;
+        }
+      }
+    } catch {}
+    return match;
+  }
+  return null;
+};
+
 export const getQuizByLessonId = async (lessonId) => {
   // Try to source a real quiz from Bubble if available, cached under quizzes
   let data = getWebData();

@@ -38,13 +38,15 @@ export default function LessonScreen() {
       const quizData = await getQuizByLessonId(idStr);
       const progressData: any[] = await getProgress(idStr as any);
 
+      console.log('[LESSON DEBUG] Quiz data:', quizData ? JSON.stringify({id: quizData.id, title: quizData.title, lesson_id: quizData.lesson_id}) : 'NULL');
+
       setLesson(lessonData as Lesson);
       setQuiz((quizData as any) as Quiz);
 
       const completionStatus = Array.isArray(progressData) && progressData.length > 0 && !!progressData[0].is_completed;
       setIsCompleted(completionStatus);
 
-      logger.db.query('lesson', `Lesson loaded: ${lessonData?.title || 'Unknown'}, Quiz: ${quizData ? 'Available' : 'None'}, Completed: ${completionStatus}`);
+      logger.db.query('lesson', `Lesson loaded: ${lessonData?.title || 'Unknown'}, Quiz: ${quizData ? `ID=${quizData.id}` : 'None'}, Completed: ${completionStatus}`);
 
       // Try local content first, then fallback to lesson.content
       let content: LessonContent = null;
@@ -130,8 +132,11 @@ export default function LessonScreen() {
   };
 
   const handleStartQuiz = () => {
+    console.log('[LESSON DEBUG] handleStartQuiz - quiz:', quiz);
     if (quiz) {
-      router.push(`/quiz/${String((quiz as any).id)}`);
+      const quizIdToNavigate = String((quiz as any).id);
+      console.log('[LESSON DEBUG] Navigating to quiz with ID:', quizIdToNavigate, 'Type:', typeof (quiz as any).id);
+      router.push(`/quiz/${quizIdToNavigate}`);
     } else {
       Alert.alert('No Quiz', 'This lesson does not have a quiz.');
     }

@@ -331,6 +331,32 @@ export default function LoginScreen() {
               )}
             </TouchableOpacity>
 
+            <View style={styles.dividerContainer}>
+              <View style={styles.divider} />
+              <Text style={styles.dividerText}>or continue with</Text>
+              <View style={styles.divider} />
+            </View>
+
+            <View style={styles.socialButtonsContainer}>
+              <TouchableOpacity
+                style={styles.socialButton}
+                onPress={() => Alert.alert('Coming Soon', 'Facebook login will be available soon!')}
+                disabled={isLoading}
+              >
+                <Text style={styles.socialButtonIcon}>f</Text>
+                <Text style={styles.socialButtonText}>Facebook</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.socialButton}
+                onPress={() => Alert.alert('Coming Soon', 'Google login will be available soon!')}
+                disabled={isLoading}
+              >
+                <Text style={styles.socialButtonIcon}>G</Text>
+                <Text style={styles.socialButtonText}>Google</Text>
+              </TouchableOpacity>
+            </View>
+
             <View style={styles.signupContainer}>
               <Text style={styles.signupText}>Don&apos;t have an account? </Text>
               <TouchableOpacity onPress={navigateToSignup} disabled={isLoading}>
@@ -427,6 +453,49 @@ const styles = StyleSheet.create({
   signupLink: {
     ...typography.body2,
     color: colors.primary,
+    fontWeight: '600',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: spacing.lg,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    paddingHorizontal: spacing.md,
+  },
+  socialButtonsContainer: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  socialButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    minHeight: 48,
+  },
+  socialButtonIcon: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.primary,
+    marginRight: spacing.xs,
+  },
+  socialButtonText: {
+    ...typography.body2,
+    color: colors.textPrimary,
     fontWeight: '600',
   },
   errorContainer: {
